@@ -61,3 +61,15 @@ Before writing any code, review this file and the OpenSpec artifacts at `openspe
 - `design.md` — technical decisions
 - `specs/*/spec.md` — detailed requirements
 - `tasks.md` — implementation checklist
+
+**IMPORTANT — Incremental PR Strategy:** Do NOT implement all 70 tasks at once. Work through task groups one at a time. After each 1–2 task groups, pause and remind the user to create a PR following the rules above. Typical cadence:
+
+| Round | Task Group | feat Branch |
+|-------|-----------|-------------|
+| 1 | 1.1–1.3 Backend scaffold | `feat/backend-scaffold` |
+| 2 | 1.4–1.6 Frontend scaffold | `feat/frontend-scaffold` |
+| 3 | 2.1–2.7 YAML Schema + Pydantic | `feat/yaml-schemas` |
+| 4 | 3.1–3.8 Database layer | `feat/database-layer` |
+| ... | (continue pattern) | ... |
+
+Always remind the user when a task group is ready for PR.
