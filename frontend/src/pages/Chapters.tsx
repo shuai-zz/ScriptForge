@@ -151,7 +151,7 @@ export default function ChaptersPage() {
   // Add/Edit
   const [modalOpen, setModalOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [editDetail, setEditDetail] = useState<ChapterDetail | null>(null);
+  const [_editDetail, setEditDetail] = useState<ChapterDetail | null>(null);
   const [form, setForm] = useState({ title: "", raw_text: "" });
   const [saving, setSaving] = useState(false);
 
