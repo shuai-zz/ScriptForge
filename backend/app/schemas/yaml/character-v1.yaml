@@ -1,0 +1,71 @@
+# ScriptForge Character Schema v1.0
+# Individual character profile, separable from scripts.
+# Design rationale: characters are first-class entities — reusable across
+# projects, versioned independently, and feed both AI dialogue generation
+# and the relationship graph visualization.
+
+schema_version: "1.0"
+schema_name: "scriptforge-character"
+
+character_id: "char-001"                      # UUID, required
+name: "林默"                                   # string, required
+aliases: ["小林", "林警官"]                    # [string], optional
+
+basic_info:
+  age: 32                                      # integer, optional
+  gender: "男"                                 # string, optional
+  occupation: "刑警"                           # string, optional
+  appearance: "寸头，眼角有旧伤疤，常穿黑色夹克"   # string, optional
+
+story_role:
+  type: "protagonist"                          # enum: protagonist | antagonist | supporting | minor
+  archetype: "悲剧英雄"                         # string, optional
+  motivation: "为死去搭档报仇，同时逃避自己的罪疚感" # string, optional
+  goals:
+    - "找到三年前案件的真相"
+    - "保护现在的家人不被牵连"
+  flaw: "过度自责导致封闭自我，拒绝他人帮助"      # string, optional
+
+arc:
+  starting_state: "自我封闭，独来独往，不信任任何人" # string, optional
+  midpoint_shift: "发现凶手与自己有深层联系，被迫面对过去" # string, optional
+  ending_state: "接受自己的不完美，选择宽恕而非复仇"   # string, optional
+
+voice:
+  speech_patterns: "短句为主，沉默时间长，情绪激动时会提高音量" # string, optional
+  catchphrases: ["这不关你的事", "让我一个人待着"]   # [string], optional
+  vocabulary_level: "casual"                   # enum: simple | casual | formal | elevated | technical
+
+relationships:
+  - target_char_id: "char-002"
+    type: "rival"                             # enum: lover | family | friend | rival | mentor | enemy | colleague | other
+    intensity: 4                               # integer 1-5
+    history: "三年前案件中立场对立，彼此心怀怨恨"
+    current_status: "表面合作，暗中试探"
+    predicted_evolution: "真相揭露后从敌对转为复杂共生"
+
+  - target_char_id: "char-003"
+    type: "family"
+    intensity: 5
+    history: "林默的女儿，因他的工作受到伤害"
+    current_status: "疏远但彼此牵挂"
+    predicted_evolution: "最终和解"
+
+# Evidence from the source novel that supports this character profile.
+source_evidence:
+  - chapter: 1
+    paragraph: 12
+    quote: "林默摸了摸眼角的伤疤，那是三年前留下的。"
+    context: "第一次出场时的外貌描写"
+
+  - chapter: 3
+    paragraph: 45
+    quote: "他从不接受搭档的帮助，直到那个人死去。"
+    context: "揭示林默封闭性格的背景"
+
+# Computed / tracked stats (updated during conversion).
+appearance_stats:
+  scene_count: 24                              # integer >= 0
+  dialogue_count: 47                           # integer >= 0
+  first_scene: 1                               # integer, optional
+  last_scene: 28                               # integer, optional
