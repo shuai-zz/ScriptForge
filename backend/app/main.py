@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import conversion, providers
+from app.routers import chapters, conversion, projects, providers
 
 app = FastAPI(
     title="ScriptForge API",
@@ -22,6 +22,8 @@ app.add_middleware(
 
 
 app.include_router(providers.router)
+app.include_router(projects.router)
+app.include_router(chapters.router)
 app.include_router(conversion.router)
 
 
