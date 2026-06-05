@@ -1,6 +1,14 @@
 """LangGraph pipeline nodes — Stage 0, Stage 1, Stage 2, and utilities."""
 
+import json
+
+from langchain_core.messages import HumanMessage
+from langchain_core.runnables import RunnableConfig
+
 from app.pipeline.state import ConversionState
+from app.schemas.story_bible import StoryBibleV1
+from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
+from app.services.prompt_registry import PromptRegistry
 
 
 # ── Stage 0 ──
@@ -57,5 +65,112 @@ def validate_input(state: ConversionState) -> dict:
             "percent": 5,
             "message": "输入验证通过",
             "details": {"chapter_count": len(chapters)},
+        },
+    }
+
+
+async def stage_0_bible(state: ConversionState, config: RunnableConfig) -> dict:
+    """Stage 0: Generate Story Bible from all chapters via LLM.
+
+    Expects provider configs under config["configurable"]["providers"].
+    The stage_0 provider is selected via state["provider_assignments"]["stage_0"].
+    """
+    chapters = state.get("chapters", [])
+    provider_id = state.get("provider_assignments", {}).get("stage_0")
+    providers = config.get("configurable", {}).get("providers", {})
+
+    provider_cfg = providers.get(provider_id)
+    if not provider_cfg:
+        return {
+            "errors": [f"Stage 0 provider '{provider_id}' not found in config"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_0_bible",
+                "percent": 5,
+                "message": "Stage 0 启动失败：模型配置缺失",
+            },
+        }
+
+    # Build novel text
+    novel_text = "\n\n".join(
+        f"## 第{ch['chapter_number']}章 {ch.get('title', '')}\n\n{ch.get('raw_text', '')}"
+        for ch in chapters
+    )
+
+    # Render prompt
+    try:
+        prompt_text = PromptRegistry.render(
+            "stage_0", "bible_generation", novel_text=novel_text
+        )
+    except KeyError as exc:
+        return {
+            "errors": [f"Prompt error: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_0_bible",
+                "percent": 5,
+                "message": "Prompt 模板错误",
+            },
+        }
+
+    # Call LLM
+    try:
+        llm = create_chat_model_from_config(provider_cfg)
+        response = await llm.ainvoke([HumanMessage(content=prompt_text)])
+        content = str(response.content)
+    except LLMFactoryError as exc:
+        return {
+            "errors": [f"LLM factory error: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_0_bible",
+                "percent": 5,
+                "message": "LLM 初始化失败",
+            },
+        }
+    except Exception as exc:
+        return {
+            "errors": [f"LLM invocation error: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_0_bible",
+                "percent": 5,
+                "message": "LLM 调用失败",
+            },
+        }
+
+    # Parse JSON response
+    try:
+        json_str = content
+        if "```json" in content:
+            json_str = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            json_str = content.split("```")[1].split("```")[0].strip()
+
+        data = json.loads(json_str)
+        story_bible = StoryBibleV1.model_validate(data)
+    except Exception as exc:
+        return {
+            "errors": [f"Failed to parse StoryBible response: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_0_bible",
+                "percent": 5,
+                "message": "故事圣经解析失败",
+                "details": {"raw_preview": content[:500]},
+            },
+        }
+
+    return {
+        "story_bible": story_bible.model_dump(),
+        "status": "running",
+        "progress": {
+            "current_stage": "stage_0_bible",
+            "percent": 20,
+            "message": "故事圣经生成完成",
+            "details": {
+                "character_count": len(story_bible.character_network.nodes),
+                "theme_count": len(story_bible.themes),
+            },
         },
     }
