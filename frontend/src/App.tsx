@@ -6,6 +6,7 @@ import PipelineProgress from "./pages/PipelineProgress";
 import ProjectSettings from "./pages/ProjectSettings";
 import ProviderConfig from "./pages/ProviderConfig";
 import ScriptEditor from "./pages/ScriptEditor";
+import VersionHistory from "./pages/VersionHistory";
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/projects/:projectId/providers" element={<ProviderConfig />} />
         <Route path="/projects/:projectId/convert" element={<PipelineProgress />} />
         <Route path="/projects/:projectId/script" element={<ScriptEditor />} />
+        <Route path="/projects/:projectId/versions" element={<VersionHistory />} />
       </Route>
     </Routes>
   );
