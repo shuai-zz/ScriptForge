@@ -449,3 +449,87 @@ def stage_2_assemble(state: ConversionState) -> dict:
             "details": {"scene_count": len(all_scenes)},
         },
     }
+
+
+def quality_gate_2(state: ConversionState) -> dict:
+    """Stage 2 quality gate: validate assembled screenplay.
+
+    Checks:
+      - Scene count >= 10
+      - Character consistency (all char_ids in script exist in Story Bible)
+      - Basic timeline coherence placeholder (full validators in Group 11)
+
+    Unlike Stage 0, failures here are flagged as issues rather than
+    triggering automatic retries — the assemble node is deterministic.
+    Conditional edges route to format_output (pass) or flag_issues (fail).
+    """
+    script = state.get("assembled_script")
+    story_bible = state.get("story_bible", {})
+
+    issues: list[str] = []
+    passed = True
+
+    if not script:
+        issues.append("剧本未组装。")
+        passed = False
+    else:
+        scenes = script.get("scenes", [])
+
+        # Scene count
+        if len(scenes) < 10:
+            issues.append(
+                f"场景数量不足：{len(scenes)} 个（建议至少 10 个）。"
+            )
+            passed = False
+
+        # Character consistency
+        char_ids_in_script: set[str] = set()
+        for scene in scenes:
+            for block in scene.get("blocks", []):
+                if block.get("char_id"):
+                    char_ids_in_script.add(block["char_id"])
+            for char in scene.get("characters_present", []):
+                char_ids_in_script.add(char)
+
+        char_network = story_bible.get("character_network", {})
+        known_char_ids = {
+            n["character_id"] for n in char_network.get("nodes", [])
+        }
+        orphan_chars = char_ids_in_script - known_char_ids
+        if orphan_chars:
+            issues.append(
+                f"角色一致性错误：{len(orphan_chars)} 个角色未在故事圣经中注册。"
+            )
+            passed = False
+
+        # Timeline coherence (placeholder — full validators in Group 11)
+        # Naive check: flag same-location scenes with large time jumps
+        for i in range(1, len(scenes)):
+            prev = scenes[i - 1].get("slug", {})
+            curr = scenes[i].get("slug", {})
+            if (
+                prev.get("location_name") == curr.get("location_name")
+                and prev.get("time") != curr.get("time")
+                and {prev.get("time"), curr.get("time")} == {"NIGHT", "DAY"}
+            ):
+                # This is a very coarse heuristic; semantic validators will refine
+                pass
+
+    return {
+        "quality_checks": {
+            "stage_2": {
+                "passed": passed,
+                "issues": issues,
+                "retry_count": 0,  # Stage 2 does not auto-retry
+            }
+        },
+        "progress": {
+            "current_stage": "quality_gate_2",
+            "percent": 78 if passed else 76,
+            "message": "Stage 2 质量检查通过" if passed else "Stage 2 质量检查发现问题",
+            "details": {
+                "passed": passed,
+                "issues": issues,
+            },
+        },
+    }
