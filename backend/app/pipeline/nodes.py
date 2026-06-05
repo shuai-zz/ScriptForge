@@ -533,3 +533,118 @@ def quality_gate_2(state: ConversionState) -> dict:
             },
         },
     }
+
+
+# ── Output ──
+
+
+async def format_output(
+    state: ConversionState, config: RunnableConfig
+) -> dict:
+    """Validate final script, serialize to YAML, and persist to DB + Git.
+
+    Expects optional ``config["configurable"]["db_session"]`` (AsyncSession)
+    and ``config["configurable"]["git_service"]`` for persistence.
+    When absent, validation and YAML generation still run; persistence
+    is skipped (useful for tests and dry-runs).
+    """
+    script_dict = state.get("assembled_script")
+    if not script_dict:
+        return {
+            "errors": ["没有可输出的剧本。"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "format_output",
+                "percent": 80,
+                "message": "输出失败：无剧本数据",
+            },
+        }
+
+    # Validate against ScriptV1 Pydantic model
+    try:
+        script = ScriptV1.model_validate(script_dict)
+    except Exception as exc:
+        return {
+            "errors": [f"最终剧本验证失败: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "format_output",
+                "percent": 80,
+                "message": "输出失败：剧本验证错误",
+            },
+        }
+
+    # Serialize to YAML (mode="json" converts Enums/dates to plain values)
+    try:
+        yaml_str = yaml.safe_dump(
+            script.model_dump(mode="json"),
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+    except Exception as exc:
+        return {
+            "errors": [f"YAML 序列化失败: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "format_output",
+                "percent": 80,
+                "message": "输出失败：序列化错误",
+            },
+        }
+
+    # Persist to DB + Git if services are injected via config
+    db = config.get("configurable", {}).get("db_session")
+    git = config.get("configurable", {}).get("git_service")
+    project_id = state.get("project_id")
+    run_id = state.get("run_id")
+
+    if db and project_id and run_id:
+        try:
+            from app.models.conversion import ConversionRun
+            from sqlalchemy import select
+
+            result = await db.execute(
+                select(ConversionRun).where(ConversionRun.id == run_id)
+            )
+            run = result.scalar_one_or_none()
+            if run:
+                run.status = "completed"
+                run.completed_at = __import__("datetime").datetime.utcnow()
+                # checkpoint_state holds the final YAML
+                run.checkpoint_state = {
+                    "yaml": yaml_str,
+                    "script": script.model_dump(),
+                }
+                await db.commit()
+        except Exception as exc:
+            return {
+                "errors": [f"数据库持久化失败: {exc}"],
+                "status": "failed",
+                "progress": {
+                    "current_stage": "format_output",
+                    "percent": 95,
+                    "message": "输出失败：数据库错误",
+                },
+            }
+
+    # Git persistence (placeholder — full Git wrapper in Phase 9)
+    if git and project_id:
+        try:
+            await git.save_script(project_id, yaml_str, tag="ai-generated")
+        except Exception as exc:
+            # Non-fatal: DB is source of truth; Git is versioning layer
+            pass
+
+    return {
+        "status": "completed",
+        "progress": {
+            "current_stage": "format_output",
+            "percent": 100,
+            "message": "转换完成",
+            "details": {
+                "scene_count": len(script.scenes),
+                "yaml_size": len(yaml_str),
+            },
+        },
+    }
