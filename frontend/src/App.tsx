@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
 import Dashboard from "./pages/Dashboard";
+import PipelineProgress from "./pages/PipelineProgress";
 import ProviderConfig from "./pages/ProviderConfig";
 
 export default function App() {
@@ -9,6 +10,7 @@ export default function App() {
       <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/projects/:projectId/providers" element={<ProviderConfig />} />
+        <Route path="/projects/:projectId/convert" element={<PipelineProgress />} />
       </Route>
     </Routes>
   );
