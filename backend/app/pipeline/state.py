@@ -47,6 +47,7 @@ class ConversionState(TypedDict, total=False):
 
     # ── Identity ──
     project_id: str
+    project_title: str
     run_id: str | None
 
     # ── Inputs ──

@@ -8,7 +8,7 @@ from langchain_core.runnables import RunnableConfig
 from langgraph.types import Send
 
 from app.pipeline.state import ConversionState
-from app.schemas.script import Scene
+from app.schemas.script import Scene, ScriptMetadata, ScriptV1
 from app.schemas.story_bible import StoryBibleV1
 from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
 from app.services.prompt_registry import PromptRegistry
@@ -356,4 +356,96 @@ async def stage_1_chapter(
 
     return {
         "chapter_scripts": {str(chapter_number): scenes},
+    }
+
+
+# ── Stage 2 ──
+
+
+def stage_2_assemble(state: ConversionState) -> dict:
+    """Assemble all chapter scenes into a complete screenplay.
+
+    - Concatenates scenes in chapter order
+    - Assigns sequential scene_numbers (1, 2, 3...)
+    - Generates scene_index entries
+    - Builds a ScriptV1 Pydantic model
+
+    Semantic validators (Group 11) are stubbed here; full integration
+    will be wired once validators are implemented.
+    """
+    chapters = state.get("chapters", [])
+    chapter_scripts = state.get("chapter_scripts", {})
+    story_bible = state.get("story_bible", {})
+    project_title = state.get("project_title", "未命名剧本")
+
+    # Collect scenes in chapter order
+    all_scenes: list[dict] = []
+    for ch in chapters:
+        ch_num = str(ch["chapter_number"])
+        scenes = chapter_scripts.get(ch_num, [])
+        all_scenes.extend(scenes)
+
+    if not all_scenes:
+        return {
+            "errors": ["组装失败：没有可用的场景。"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_2_assemble",
+                "percent": 60,
+                "message": "剧本组装失败：无场景数据",
+            },
+        }
+
+    # Assign sequential scene numbers
+    for i, scene in enumerate(all_scenes, start=1):
+        scene["scene_number"] = i
+
+    # Build scene_index
+    scene_index = []
+    for scene in all_scenes:
+        slug = scene.get("slug", {})
+        slug_line = (
+            f"{slug.get('location_type', '')} {slug.get('location_name', '')} - "
+            f"{slug.get('time', '')}"
+        ).strip()
+        scene_index.append(
+            {
+                "scene_id": scene.get("scene_id", f"scene-{scene['scene_number']}"),
+                "scene_number": scene["scene_number"],
+                "slug_line": slug_line,
+                "summary": scene.get("summary", ""),
+                "characters": scene.get("characters_present", []),
+            }
+        )
+
+    # Build ScriptV1
+    try:
+        script = ScriptV1(
+            metadata=ScriptMetadata(
+                title=project_title,
+                total_scenes=len(all_scenes),
+            ),
+            scenes=all_scenes,
+            scene_index=scene_index,
+        )
+    except Exception as exc:
+        return {
+            "errors": [f"剧本模型验证失败: {exc}"],
+            "status": "failed",
+            "progress": {
+                "current_stage": "stage_2_assemble",
+                "percent": 60,
+                "message": "剧本组装失败：模型验证错误",
+            },
+        }
+
+    return {
+        "assembled_script": script.model_dump(),
+        "status": "running",
+        "progress": {
+            "current_stage": "stage_2_assemble",
+            "percent": 75,
+            "message": f"剧本组装完成，共 {len(all_scenes)} 个场景",
+            "details": {"scene_count": len(all_scenes)},
+        },
     }
