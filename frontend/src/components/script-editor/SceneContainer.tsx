@@ -19,12 +19,14 @@ import { CSS } from "@dnd-kit/utilities";
 import type { Scene, ScriptBlock, ScriptCharacter } from "@/types/script";
 import ActionBlock from "./ActionBlock";
 import DialogueBlock from "./DialogueBlock";
+import { cn } from "@/lib/utils";
 import { GripVertical, Plus, Trash2 } from "lucide-react";
 
 interface SceneContainerProps {
   scene: Scene;
   characters: ScriptCharacter[];
   selectedBlockId: string | null;
+  highlightedBlockId: string | null;
   readOnly?: boolean;
   onUpdateBlock: (blockId: string, updates: Partial<ScriptBlock>) => void;
   onAddBlock: (afterBlockId?: string, type?: ScriptBlock["type"]) => void;
@@ -38,6 +40,7 @@ function SortableBlockItem({
   block,
   characters,
   isSelected,
+  isHighlighted,
   readOnly,
   onUpdate,
   onSelect,
@@ -48,6 +51,7 @@ function SortableBlockItem({
   block: ScriptBlock;
   characters: ScriptCharacter[];
   isSelected: boolean;
+  isHighlighted: boolean;
   readOnly?: boolean;
   onUpdate: (updates: Partial<ScriptBlock>) => void;
   onSelect: () => void;
@@ -81,7 +85,7 @@ function SortableBlockItem({
           <GripVertical size={14} />
         </button>
       )}
-      <div className="group">
+      <div className={cn("group transition-all", isHighlighted && "animate-pulse-highlight")}>
         {block.type === "action" ? (
           <ActionBlock
             block={block}
@@ -136,6 +140,7 @@ export default function SceneContainer({
   scene,
   characters,
   selectedBlockId,
+  highlightedBlockId,
   readOnly,
   onUpdateBlock,
   onAddBlock,
@@ -197,6 +202,7 @@ export default function SceneContainer({
                 block={block}
                 characters={characters}
                 isSelected={selectedBlockId === block.block_id}
+                isHighlighted={highlightedBlockId === block.block_id}
                 readOnly={readOnly}
                 onUpdate={(updates) => onUpdateBlock(block.block_id, updates)}
                 onSelect={() => onSelectBlock(block.block_id)}

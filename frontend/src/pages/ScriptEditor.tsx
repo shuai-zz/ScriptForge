@@ -4,6 +4,7 @@ import SceneTimeline from "@/components/script-editor/SceneTimeline";
 import SceneNav from "@/components/script-editor/SceneNav";
 import SceneContainer from "@/components/script-editor/SceneContainer";
 import CommandPalette from "@/components/script-editor/CommandPalette";
+import AnnotationSidebar from "@/components/script-editor/AnnotationSidebar";
 import { cn } from "@/lib/utils";
 import { Keyboard, Maximize2, Minimize2 } from "lucide-react";
 
@@ -172,10 +173,59 @@ function makeDemoScript(): ScriptV1 {
   };
 }
 
+/** Demo annotations for preview (Phase 8) */
+function makeDemoAnnotations() {
+  return [
+    {
+      id: "a1",
+      annotation_id: "ann-001",
+      severity: "suggestion" as const,
+      category: "inner_to_visual",
+      title: "内心独白转视觉动作",
+      description: "汪淼的内心恐惧可以通过视觉元素（颤抖的手、照片掉落）来呈现，而非直接叙述。",
+      confidence: 0.82,
+      status: "pending" as const,
+      block_id: "b1",
+      scene_id: "s1",
+      alternatives: [
+        { alternative_id: "alt1", text: "汪淼的手颤抖着，照片从指间滑落", pros: "更电影化，视觉冲击力更强", cons: "损失部分内心细腻描写" },
+        { alternative_id: "alt2", text: "保持原文叙述风格", pros: "保留文学质感", cons: "电影感较弱" },
+      ],
+    },
+    {
+      id: "a2",
+      annotation_id: "ann-002",
+      severity: "warning" as const,
+      category: "dialogue_enhancement",
+      title: "对话可以更加口语化",
+      description: "丁仪的台词偏学术化，可以加入更多口语化表达来体现他\"玩世不恭\"的特质。",
+      confidence: 0.65,
+      status: "pending" as const,
+      block_id: "b4",
+      scene_id: "s2",
+      alternatives: [],
+    },
+    {
+      id: "a3",
+      annotation_id: "ann-003",
+      severity: "info" as const,
+      category: "pacing_suggestion",
+      title: "场景节奏建议",
+      description: "当前三个场景节奏偏慢，建议在台球厅场景增加一个视觉转折来加快节奏。",
+      confidence: 0.71,
+      status: "pending" as const,
+      scene_id: "s2",
+      alternatives: [],
+    },
+  ];
+}
+
 export default function ScriptEditor() {
   const [script, setScript] = useState<ScriptV1>(makeDemoScript);
+  const [annotations, setAnnotations] = useState<any[]>(makeDemoAnnotations);
   const [activeSceneId, setActiveSceneId] = useState<string | null>("s1");
   const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
@@ -360,6 +410,16 @@ export default function ScriptEditor() {
         />
       )}
 
+      {/* Global annotations */}
+      {!focusMode && (
+        <div className="border-b border-border bg-amber-gold/5 px-4 py-2">
+          <div className="flex items-center gap-2 text-xs text-amber-gold">
+            <span className="font-bold">全局建议:</span>
+            <span>当前3个场景节奏偏慢，建议在台球厅场景增加视觉转折。</span>
+          </div>
+        </div>
+      )}
+
       {/* Main editor area */}
       <div className="flex flex-1 overflow-hidden">
         {/* Left nav */}
@@ -389,6 +449,7 @@ export default function ScriptEditor() {
                   scene={scene}
                   characters={script.characters}
                   selectedBlockId={selectedBlockId}
+                  highlightedBlockId={hoveredBlockId}
                   readOnly={false}
                   onUpdateBlock={(blockId, updates) => updateBlock(scene.scene_id, blockId, updates)}
                   onAddBlock={(afterBlockId, type) => addBlock(scene.scene_id, afterBlockId, type)}
@@ -402,6 +463,23 @@ export default function ScriptEditor() {
           </div>
         </main>
       </div>
+
+      {/* Right sidebar */}
+      {!focusMode && (
+        <AnnotationSidebar
+          annotations={annotations}
+          activeBlockId={selectedBlockId}
+          onHoverAnnotation={(blockId) => setHoveredBlockId(blockId)}
+          onClickAnnotation={(blockId) => {
+            setSelectedBlockId(blockId);
+            const scene = script.scenes.find((s) => s.blocks.some((b) => b.block_id === blockId));
+            if (scene) setActiveSceneId(scene.scene_id);
+          }}
+          onAccept={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "accepted" as const } : a))}
+          onIgnore={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignored" as const } : a))}
+          onApplyAlternative={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "modified" as const } : a))}
+        />
+      )}
 
       {/* Command palette */}
       <CommandPalette
