@@ -1,0 +1,74 @@
+# ScriptForge Project Config Schema v1.0
+# Per-project configuration: LLM providers, conversion parameters,
+# input chapters, and output settings. Design rationale: users bring
+# their own API keys and should control model assignment per pipeline
+# stage to balance cost vs. quality.
+
+schema_version: "1.0"
+schema_name: "scriptforge-project-config"
+
+# LLM provider configurations. Each provider can be assigned to one or
+# more pipeline stages (stage_0 = bible, stage_1 = conversion, stage_2 = assembly).
+llm_providers:
+  - provider_id: "prov-001"
+    label: "Claude Sonnet"                     # string, user-friendly name
+    provider_type: "anthropic"                 # enum: anthropic | openai_compatible
+    model_name: "claude-sonnet-4"              # string
+    base_url: null                             # string, optional (for openai_compatible)
+    encrypted_api_key: "aes256gcm$..."         # string, AES-256-GCM encrypted
+    assigned_stages:                           # enum: stage_0 | stage_1 | stage_2
+      - "stage_1"                              # creative conversion → premium model
+      - "stage_2"                              # assembly & validation → premium model
+    parameters:
+      temperature: 0.8                         # float 0.0-2.0
+      max_tokens: 8192                         # integer, optional
+      thinking: true                           # boolean, anthropic extended thinking
+
+  - provider_id: "prov-002"
+    label: "DeepSeek V3"
+    provider_type: "openai_compatible"
+    model_name: "deepseek-chat"
+    base_url: "https://api.deepseek.com/v1"
+    encrypted_api_key: "aes256gcm$..."
+    assigned_stages:
+      - "stage_0"                              # analysis → cheaper/faster model OK
+    parameters:
+      temperature: 0.3                         # lower temp for analysis
+      max_tokens: 4096
+      thinking: false
+
+# Conversion parameters control how the AI adapts novel to script.
+conversion_params:
+  target_format: "movie"                       # enum: movie | tv_series | stage_play
+  language: "zh"                               # enum: zh | en
+  scene_title_style: "chinese"                 # enum: international | chinese
+                                                # international: "SCENE 1 - INT. BEDROOM - NIGHT"
+                                                # chinese: "场景 1 - 内景. 卧室 - 夜"
+  dialogue_name_style: "full_name"             # enum: full_name | nickname | role
+  annotation_detail_level: "standard"          # enum: minimal | standard | verbose
+  auto_split: true                             # boolean, auto-split long chapters into scenes
+  dialogue_preservation: "preserve"            # enum: rewrite | preserve | enhance
+                                                # rewrite: AI freely rewrites dialogue
+                                                # preserve: keep original dialogue as much as possible
+                                                # enhance: preserve but polish for screenplay format
+
+# Input chapters uploaded by the user.
+input_chapters:
+  - chapter_number: 1
+    title: "第一章"
+    word_count: 3200
+
+  - chapter_number: 2
+    title: "第二章"
+    word_count: 4100
+
+  - chapter_number: 3
+    title: "第三章"
+    word_count: 2800
+
+# Output settings for export.
+output_settings:
+  formats:                                     # [enum: yaml | pdf | fountain | fdx]
+    - "yaml"
+    - "pdf"
+  destination: "./exports/"                    # string, optional, relative path
