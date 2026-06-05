@@ -5,8 +5,9 @@ import SceneNav from "@/components/script-editor/SceneNav";
 import SceneContainer from "@/components/script-editor/SceneContainer";
 import CommandPalette from "@/components/script-editor/CommandPalette";
 import AnnotationSidebar from "@/components/script-editor/AnnotationSidebar";
+import ExportDialog from "@/components/script-editor/ExportDialog";
 import { cn } from "@/lib/utils";
-import { Keyboard, Maximize2, Minimize2 } from "lucide-react";
+import { Keyboard, Maximize2, Minimize2, Download } from "lucide-react";
 
 /** Demo script for preview (Phase 7 placeholder data) */
 function makeDemoScript(): ScriptV1 {
@@ -228,6 +229,7 @@ export default function ScriptEditor() {
   const [hoveredBlockId, setHoveredBlockId] = useState<string | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
   /** ---- Block operations ---- */
@@ -390,6 +392,13 @@ export default function ScriptEditor() {
             </button>
             <button
               className="rounded p-1.5 text-muted hover:bg-accent hover:text-foreground"
+              onClick={() => setExportOpen(true)}
+              title="导出剧本"
+            >
+              <Download size={16} />
+            </button>
+            <button
+              className="rounded p-1.5 text-muted hover:bg-accent hover:text-foreground"
               onClick={() => setFocusMode((v) => !v)}
               title={focusMode ? "退出专注模式" : "专注模式 (Shift+F)"}
             >
@@ -492,8 +501,15 @@ export default function ScriptEditor() {
         onClose={() => setCommandOpen(false)}
         onNavigateScene={setActiveSceneId}
         onCreateCheckpoint={() => { /* TODO */ }}
-        onExport={() => { /* TODO */ }}
+        onExport={() => setExportOpen(true)}
         onToggleFocus={() => setFocusMode((v) => !v)}
+      />
+
+      {/* Export dialog */}
+      <ExportDialog
+        open={exportOpen}
+        projectId="demo-project"
+        onClose={() => setExportOpen(false)}
       />
     </div>
   );
