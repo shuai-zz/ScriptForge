@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* ── 暗房 The Darkroom — Design Tokens ── */
+@theme {
+  /* Colors */
+  --color-page: #0b0b12;
+  --color-surface: #13141f;
+  --color-card: #1a1b2e;
+  --color-card-hover: #1f2038;
+
+  --color-primary: #d4a853;
+  --color-primary-hover: #e0be6a;
+  --color-primary-muted: rgba(212, 168, 83, 0.15);
+
+  --color-secondary: #5b8c85;
+  --color-secondary-hover: #6da39b;
+
+  --color-tertiary: #8b7fa8;
+
+  --color-success: #4caf50;
+  --color-warning: #e2b04a;
+  --color-error: #e5534b;
+
+  --color-text-primary: #e8e6e3;
+  --color-text-secondary: #9895a0;
+  --color-text-muted: #5c5a66;
+
+  --color-border: rgba(232, 230, 227, 0.08);
+  --color-border-active: rgba(212, 168, 83, 0.3);
+
+  /* Typography */
+  --font-display: "Playfair Display", serif;
+  --font-sans: "Inter", system-ui, sans-serif;
+  --font-script: "Courier Prime", monospace;
+  --font-mono: "JetBrains Mono", monospace;
+
+  /* Spacing & Sizing */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* Shadows — warm, lamp-like */
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.4), 0 0 1px rgba(212, 168, 83, 0.08);
+  --shadow-card-hover: 0 4px 16px rgba(0, 0, 0, 0.5), 0 0 2px rgba(212, 168, 83, 0.12);
+  --shadow-dialog: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Base Styles ── */
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background-color: var(--color-page);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-text-muted);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-secondary);
+}
+
+/* ── Selection ── */
+::selection {
+  background: rgba(212, 168, 83, 0.3);
+  color: var(--color-text-primary);
+}
+
+/* ── Focus Ring ── */
+*:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
