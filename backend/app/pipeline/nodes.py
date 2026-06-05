@@ -238,16 +238,14 @@ def quality_gate_0(state: ConversionState) -> dict:
 # ── Stage 1 ──
 
 
-def stage_1_splitter(state: ConversionState) -> list[Send]:
-    """Split chapters into parallel conversion tasks.
+def stage_1_splitter(state: ConversionState) -> dict:
+    """No-op splitter node — the actual Send logic lives in the
+    conditional edge function ``_route_stage_1`` inside ``graph.py``.
 
-    Returns a Send for each chapter; LangGraph executes them in parallel.
-    Each Send injects 'chapter_number' into the sub-node's state.
+    This node exists so that quality_gate_0 has a deterministic
+    target to route to on success.
     """
-    return [
-        Send("stage_1_chapter", {"chapter_number": ch["chapter_number"]})
-        for ch in state.get("chapters", [])
-    ]
+    return {}
 
 
 async def stage_1_chapter(
