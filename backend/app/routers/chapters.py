@@ -123,6 +123,19 @@ async def get_chapter(
     return _to_response(chapter)
 
 
+@router.put("/reorder", response_model=dict)
+async def reorder_chapters(
+    project_id: uuid.UUID,
+    data: ChapterReorder,
+    db: AsyncSession = Depends(get_db),
+) -> dict:
+    """Reorder chapters by providing an ordered list of chapter IDs."""
+    ids = [uuid.UUID(cid) for cid in data.order]
+    await ChapterService.reorder(db, project_id, ids)
+    chapters = await ChapterService.list_by_project(db, project_id)
+    return {"order": [str(c.id) for c in chapters], "message": "排序已更新"}
+
+
 @router.put("/{chapter_id}", response_model=dict)
 async def update_chapter(
     project_id: uuid.UUID,
@@ -150,19 +163,6 @@ async def update_chapter(
         chapter = await ChapterService.update(db, chapter_id, **updates)
 
     return _to_response(chapter)
-
-
-@router.put("/reorder", response_model=dict)
-async def reorder_chapters(
-    project_id: uuid.UUID,
-    data: ChapterReorder,
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    """Reorder chapters by providing an ordered list of chapter IDs."""
-    ids = [uuid.UUID(cid) for cid in data.order]
-    await ChapterService.reorder(db, project_id, ids)
-    chapters = await ChapterService.list_by_project(db, project_id)
-    return {"order": [str(c.id) for c in chapters], "message": "排序已更新"}
 
 
 @router.delete("/{chapter_id}", status_code=204)
