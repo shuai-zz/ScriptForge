@@ -1,11 +1,11 @@
 ## 1. Project Scaffolding
 
-- [ ] 1.1 Initialize monorepo structure: `backend/` (Python/FastAPI) and `frontend/` (React/Vite/TypeScript)
-- [ ] 1.2 Backend: Set up FastAPI app skeleton with health check, CORS middleware, and project directory layout (routers/, services/, models/, schemas/, pipeline/)
-- [ ] 1.3 Backend: Configure SQLAlchemy 2.0 async engine + Alembic for PostgreSQL with base models
-- [ ] 1.4 Frontend: Initialize Vite + React 19 + TypeScript project with TailwindCSS 4, shadcn/ui, and React Router 7
-- [ ] 1.5 Frontend: Implement "暗房 The Darkroom" design system (colors, typography, spacing, shadows) as Tailwind theme + CSS variables
-- [ ] 1.6 Frontend: Build base layout shell (sidebar nav + main content area + toast notifications)
+- [x] 1.1 Initialize monorepo structure: `backend/` (Python/FastAPI) and `frontend/` (React/Vite/TypeScript)
+- [x] 1.2 Backend: Set up FastAPI app skeleton with health check, CORS middleware, and project directory layout (routers/, services/, models/, schemas/, pipeline/)
+- [x] 1.3 Backend: Configure SQLAlchemy 2.0 async engine + Alembic for PostgreSQL with base models
+- [x] 1.4 Frontend: Initialize Vite + React 19 + TypeScript project with TailwindCSS 4, shadcn/ui, and React Router 7
+- [x] 1.5 Frontend: Implement "暗房 The Darkroom" design system (colors, typography, spacing, shadows) as Tailwind theme + CSS variables
+- [x] 1.6 Frontend: Build base layout shell (sidebar nav + main content area + toast notifications)
 
 ## 2. YAML Schema Definitions & Documentation
 
