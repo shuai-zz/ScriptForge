@@ -50,12 +50,17 @@ def decrypt(ciphertext_b64: str) -> str:
 
     Raises ValueError on tampered or malformed input.
     """
+    from cryptography.exceptions import InvalidTag
+
     aes = _get_aes()
-    combined = base64.b64decode(ciphertext_b64)
-    nonce = combined[:_NONCE_SIZE]
-    ciphertext = combined[_NONCE_SIZE:]
-    plaintext = aes.decrypt(nonce, ciphertext, None)
-    return plaintext.decode("utf-8")
+    try:
+        combined = base64.b64decode(ciphertext_b64)
+        nonce = combined[:_NONCE_SIZE]
+        ciphertext = combined[_NONCE_SIZE:]
+        plaintext = aes.decrypt(nonce, ciphertext, None)
+        return plaintext.decode("utf-8")
+    except InvalidTag as exc:
+        raise ValueError("ciphertext has been tampered with or is corrupted") from exc
 
 
 def mask_key(plaintext_key: str) -> str:
