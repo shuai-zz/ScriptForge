@@ -28,6 +28,13 @@ def create_chat_model(provider: LLMProvider) -> BaseChatModel:
     Raises:
         LLMFactoryError: If provider_type is unsupported or config is invalid.
     """
+    # Validate provider type before attempting decryption
+    if provider.provider_type not in ("anthropic", "openai_compatible"):
+        raise LLMFactoryError(
+            f"Unsupported provider_type: {provider.provider_type}. "
+            "Expected 'anthropic' or 'openai_compatible'."
+        )
+
     # Decrypt the API key for runtime use
     try:
         api_key = decrypt(provider.encrypted_api_key)
@@ -50,7 +57,7 @@ def create_chat_model(provider: LLMProvider) -> BaseChatModel:
             kwargs["thinking"] = {"type": "enabled", "budget_tokens": 1024}
         return ChatAnthropic(**kwargs)
 
-    elif provider.provider_type == "openai_compatible":
+    else:  # openai_compatible
         kwargs = {
             "model": provider.model_name,
             "api_key": api_key,
@@ -61,9 +68,3 @@ def create_chat_model(provider: LLMProvider) -> BaseChatModel:
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
         return ChatOpenAI(**kwargs)
-
-    else:
-        raise LLMFactoryError(
-            f"Unsupported provider_type: {provider.provider_type}. "
-            "Expected 'anthropic' or 'openai_compatible'."
-        )
