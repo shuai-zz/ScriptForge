@@ -15,6 +15,9 @@ dist/
 # IDE
 .idea/
 .vscode/
+.claude/
+.kimi/
+.kimi-code/
 
 # OS
 .DS_Store
@@ -23,6 +26,13 @@ Thumbs.db
 # Env
 .env
 .env.local
+
+# OpenSpec
+openspec/
+
+# Project docs (managed externally)
+CLAUDE.md
+AGENTS.md
 
 # Data (runtime)
 /data/projects/
