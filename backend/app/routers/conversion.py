@@ -31,26 +31,20 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
 
     async def event_generator():
         async with async_session_factory() as db:
-            # Load project
-            project = await db.get(Project, project_id)
-            if not project:
+            try:
+                project, chapters, providers, provider_assignments = (
+                    await _load_project_providers(db, project_id)
+                )
+            except HTTPException as exc:
                 yield _sse_event(
                     {
                         "current_stage": "error",
                         "percent": 0,
-                        "message": "项目不存在",
+                        "message": exc.detail,
                         "type": "error",
                     }
                 )
                 return
-
-            # Load chapters
-            result = await db.execute(
-                select(Chapter)
-                .where(Chapter.project_id == project_id)
-                .order_by(Chapter.number)
-            )
-            chapters = result.scalars().all()
 
             if len(chapters) < 3:
                 yield _sse_event(
@@ -62,67 +56,6 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
                     }
                 )
                 return
-
-            # Load providers
-            result = await db.execute(
-                select(LLMProvider).where(LLMProvider.project_id == project_id)
-            )
-            providers_orm = result.scalars().all()
-
-            if not providers_orm:
-                yield _sse_event(
-                    {
-                        "current_stage": "error",
-                        "percent": 0,
-                        "message": "请先配置 LLM 模型",
-                        "type": "error",
-                    }
-                )
-                return
-
-            # Decrypt and build provider configs
-            providers: dict[str, dict] = {}
-            for p in providers_orm:
-                try:
-                    api_key = decrypt(p.encrypted_api_key)
-                except Exception:
-                    yield _sse_event(
-                        {
-                            "current_stage": "error",
-                            "percent": 0,
-                            "message": f"无法解密 provider {p.provider_id} 的 API 密钥",
-                            "type": "error",
-                        }
-                    )
-                    return
-
-                providers[p.provider_id] = {
-                    "provider_type": p.provider_type,
-                    "model_name": p.model_name,
-                    "api_key": api_key,
-                    "base_url": p.base_url,
-                    "parameters": p.parameters or {},
-                }
-
-            # Provider assignments per stage
-            provider_assignments: dict[str, str] = {}
-            for p in providers_orm:
-                for stage in p.assigned_stages or []:
-                    provider_assignments[stage] = p.provider_id
-
-            # Fallback: use first provider for all unassigned stages
-            if not provider_assignments:
-                first_id = providers_orm[0].provider_id
-                provider_assignments = {
-                    "stage_0": first_id,
-                    "stage_1": first_id,
-                    "stage_2": first_id,
-                }
-            else:
-                first_id = providers_orm[0].provider_id
-                for stage in ("stage_0", "stage_1", "stage_2"):
-                    if stage not in provider_assignments:
-                        provider_assignments[stage] = first_id
 
             # Create ConversionRun
             run = ConversionRun(
@@ -223,6 +156,240 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
     )
 
 
+# ── ConversionRun CRUD ──
+
+
+@router.get("/runs", response_model=list[dict])
+async def list_conversion_runs(project_id: uuid.UUID) -> list[dict]:
+    """List all conversion runs for a project."""
+    async with async_session_factory() as db:
+        result = await db.execute(
+            select(ConversionRun)
+            .where(ConversionRun.project_id == project_id)
+            .order_by(ConversionRun.started_at.desc())
+        )
+        runs = result.scalars().all()
+        return [
+            {
+                "id": str(r.id),
+                "status": r.status,
+                "stage": r.stage,
+                "error_message": r.error_message,
+                "started_at": r.started_at.isoformat() if r.started_at else None,
+                "completed_at": r.completed_at.isoformat() if r.completed_at else None,
+                "duration_seconds": r.duration_seconds,
+            }
+            for r in runs
+        ]
+
+
+@router.get("/runs/{run_id}", response_model=dict)
+async def get_conversion_run(
+    project_id: uuid.UUID, run_id: uuid.UUID
+) -> dict:
+    """Get a single conversion run."""
+    async with async_session_factory() as db:
+        run = await db.get(ConversionRun, run_id)
+        if not run or run.project_id != project_id:
+            raise HTTPException(status_code=404, detail="Conversion run not found")
+        return {
+            "id": str(run.id),
+            "status": run.status,
+            "stage": run.stage,
+            "error_message": run.error_message,
+            "started_at": run.started_at.isoformat() if run.started_at else None,
+            "completed_at": run.completed_at.isoformat() if run.completed_at else None,
+            "duration_seconds": run.duration_seconds,
+            "checkpoint_state": run.checkpoint_state,
+        }
+
+
+# ── Helpers ──
+
+
 def _sse_event(data: dict) -> str:
     """Format a dict as an SSE data line."""
     return f"data: {json.dumps(data, ensure_ascii=False)}\n\n"
+
+
+@router.post("/runs/{run_id}/resume")
+async def resume_conversion(
+    project_id: uuid.UUID, run_id: uuid.UUID
+) -> StreamingResponse:
+    """Resume a paused or failed conversion run via SSE.
+
+    Uses the LangGraph checkpointer (MemorySaver for dev) to resume
+    from the last checkpoint. Requires the same ``thread_id`` as the
+    original run (which is the run_id).
+    """
+
+    async def event_generator():
+        async with async_session_factory() as db:
+            run = await db.get(ConversionRun, run_id)
+            if not run or run.project_id != project_id:
+                yield _sse_event(
+                    {
+                        "current_stage": "error",
+                        "percent": 0,
+                        "message": "Conversion run 不存在",
+                        "type": "error",
+                    }
+                )
+                return
+
+            if run.status not in ("paused", "failed", "running"):
+                yield _sse_event(
+                    {
+                        "current_stage": "error",
+                        "percent": 0,
+                        "message": f"当前状态 '{run.status}' 不支持恢复",
+                        "type": "error",
+                    }
+                )
+                return
+
+            try:
+                _project, _chapters, providers, _pa = await _load_project_providers(
+                    db, project_id
+                )
+            except HTTPException as exc:
+                yield _sse_event(
+                    {
+                        "current_stage": "error",
+                        "percent": 0,
+                        "message": exc.detail,
+                        "type": "error",
+                    }
+                )
+                return
+
+            # Reset status to running
+            run.status = "running"
+            run.error_message = None
+            await db.commit()
+
+        graph = build_conversion_graph()
+        config = RunnableConfig(
+            configurable={
+                "thread_id": str(run_id),
+                "providers": providers,
+            }
+        )
+
+        final_status = "running"
+        final_stage = run.stage or "validate_input"
+        final_error: str | None = None
+
+        try:
+            # Resume from checkpoint by passing None as input
+            async for event in graph.astream(None, config=config):
+                for node_name, node_output in event.items():
+                    progress = node_output.get("progress", {})
+                    if progress:
+                        final_stage = progress.get("current_stage", final_stage)
+                        yield _sse_event(progress)
+
+                    errors = node_output.get("errors", [])
+                    for err in errors:
+                        final_error = err
+                        yield _sse_event(
+                            {
+                                "current_stage": node_name,
+                                "percent": progress.get("percent", 0),
+                                "message": err,
+                                "type": "error",
+                            }
+                        )
+
+                    status = node_output.get("status")
+                    if status:
+                        final_status = status
+
+        except Exception as exc:
+            final_status = "failed"
+            final_error = str(exc)
+            yield _sse_event(
+                {
+                    "current_stage": "error",
+                    "percent": 0,
+                    "message": str(exc),
+                    "type": "error",
+                }
+            )
+
+        # Update ConversionRun
+        async with async_session_factory() as db:
+            run = await db.get(ConversionRun, run_id)
+            if run:
+                run.status = final_status
+                run.stage = final_stage
+                run.error_message = final_error
+                await db.commit()
+
+        yield _sse_event(
+            {"current_stage": "done", "percent": 100, "message": "转换完成"}
+        )
+        yield "event: close\ndata: \n\n"
+
+    return StreamingResponse(
+        event_generator(), media_type="text/event-stream"
+    )
+
+
+# ── Helpers ──
+
+
+async def _load_project_providers(
+    db, project_id: uuid.UUID
+) -> tuple[Project, list[Chapter], dict[str, dict], dict[str, str]]:
+    """Load project, chapters, and decrypted providers.
+
+    Returns (project, chapters, providers, provider_assignments).
+    Raises HTTPException on missing data.
+    """
+    project = await db.get(Project, project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="项目不存在")
+
+    result = await db.execute(
+        select(Chapter)
+        .where(Chapter.project_id == project_id)
+        .order_by(Chapter.number)
+    )
+    chapters = result.scalars().all()
+
+    result = await db.execute(
+        select(LLMProvider).where(LLMProvider.project_id == project_id)
+    )
+    providers_orm = result.scalars().all()
+
+    providers: dict[str, dict] = {}
+    for p in providers_orm:
+        api_key = decrypt(p.encrypted_api_key)
+        providers[p.provider_id] = {
+            "provider_type": p.provider_type,
+            "model_name": p.model_name,
+            "api_key": api_key,
+            "base_url": p.base_url,
+            "parameters": p.parameters or {},
+        }
+
+    provider_assignments: dict[str, str] = {}
+    for p in providers_orm:
+        for stage in p.assigned_stages or []:
+            provider_assignments[stage] = p.provider_id
+
+    if not provider_assignments:
+        first_id = providers_orm[0].provider_id
+        provider_assignments = {
+            "stage_0": first_id,
+            "stage_1": first_id,
+            "stage_2": first_id,
+        }
+    else:
+        first_id = providers_orm[0].provider_id
+        for stage in ("stage_0", "stage_1", "stage_2"):
+            if stage not in provider_assignments:
+                provider_assignments[stage] = first_id
+
+    return project, chapters, providers, provider_assignments
