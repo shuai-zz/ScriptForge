@@ -2,10 +2,13 @@
 
 import json
 
+import yaml
 from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langgraph.types import Send
 
 from app.pipeline.state import ConversionState
+from app.schemas.script import Scene
 from app.schemas.story_bible import StoryBibleV1
 from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
 from app.services.prompt_registry import PromptRegistry
@@ -229,4 +232,128 @@ def quality_gate_0(state: ConversionState) -> dict:
                 "issues": issues,
             },
         },
+    }
+
+
+# ── Stage 1 ──
+
+
+def stage_1_splitter(state: ConversionState) -> list[Send]:
+    """Split chapters into parallel conversion tasks.
+
+    Returns a Send for each chapter; LangGraph executes them in parallel.
+    Each Send injects 'chapter_number' into the sub-node's state.
+    """
+    return [
+        Send("stage_1_chapter", {"chapter_number": ch["chapter_number"]})
+        for ch in state.get("chapters", [])
+    ]
+
+
+async def stage_1_chapter(
+    state: ConversionState, config: RunnableConfig
+) -> dict:
+    """Convert a single chapter into script scenes.
+
+    Receives the global state merged with the Send payload (chapter_number).
+    Uses Story Bible as shared context and the preceding chapter's script
+    for continuity.
+
+    Validates every scene with Pydantic before accepting.
+    """
+    chapter_number = state.get("chapter_number")
+    if chapter_number is None:
+        return {
+            "errors": ["stage_1_chapter 缺少 chapter_number"],
+            "chapter_scripts": {},
+        }
+
+    chapters = state.get("chapters", [])
+    story_bible = state.get("story_bible", {})
+    chapter_scripts = state.get("chapter_scripts", {})
+
+    current_ch = next(
+        (c for c in chapters if c["chapter_number"] == chapter_number), None
+    )
+    if not current_ch:
+        return {
+            "errors": [f"第 {chapter_number} 章未找到"],
+            "chapter_scripts": {},
+        }
+
+    # Preceding chapter script as YAML context
+    prev_scenes = chapter_scripts.get(str(chapter_number - 1), [])
+    previous_script = yaml.safe_dump(prev_scenes, allow_unicode=True) if prev_scenes else ""
+
+    story_bible_yaml = (
+        yaml.safe_dump(story_bible, allow_unicode=True) if story_bible else ""
+    )
+    chapter_text = current_ch.get("raw_text", "")
+
+    # Render prompt
+    try:
+        prompt_text = PromptRegistry.render(
+            "stage_1",
+            "chapter_conversion",
+            chapter_text=chapter_text,
+            story_bible=story_bible_yaml,
+            previous_script=previous_script,
+        )
+    except KeyError as exc:
+        return {
+            "errors": [f"Prompt error: {exc}"],
+            "chapter_scripts": {},
+        }
+
+    # Call LLM
+    provider_id = state.get("provider_assignments", {}).get("stage_1")
+    providers = config.get("configurable", {}).get("providers", {})
+    provider_cfg = providers.get(provider_id)
+
+    if not provider_cfg:
+        return {
+            "errors": [f"Stage 1 provider '{provider_id}' not found"],
+            "chapter_scripts": {},
+        }
+
+    try:
+        llm = create_chat_model_from_config(provider_cfg)
+        response = await llm.ainvoke([HumanMessage(content=prompt_text)])
+        content = str(response.content)
+    except LLMFactoryError as exc:
+        return {
+            "errors": [f"LLM factory error: {exc}"],
+            "chapter_scripts": {},
+        }
+    except Exception as exc:
+        return {
+            "errors": [f"LLM invocation error: {exc}"],
+            "chapter_scripts": {},
+        }
+
+    # Parse YAML response into Scene list
+    try:
+        yaml_str = content
+        if "```yaml" in content:
+            yaml_str = content.split("```yaml")[1].split("```")[0].strip()
+        elif "```" in content:
+            yaml_str = content.split("```")[1].split("```")[0].strip()
+
+        data = yaml.safe_load(yaml_str)
+        if isinstance(data, dict) and "scenes" in data:
+            scenes_data = data["scenes"]
+        elif isinstance(data, list):
+            scenes_data = data
+        else:
+            scenes_data = [data] if data else []
+
+        scenes = [Scene.model_validate(s).model_dump() for s in scenes_data]
+    except Exception as exc:
+        return {
+            "errors": [f"第 {chapter_number} 章场景解析失败: {exc}"],
+            "chapter_scripts": {},
+        }
+
+    return {
+        "chapter_scripts": {str(chapter_number): scenes},
     }
