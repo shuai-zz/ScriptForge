@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
-from app.routers import providers
+from app.routers import conversion, providers
 
 app = FastAPI(
     title="ScriptForge API",
@@ -22,6 +22,7 @@ app.add_middleware(
 
 
 app.include_router(providers.router)
+app.include_router(conversion.router)
 
 
 @app.get("/api/health")
