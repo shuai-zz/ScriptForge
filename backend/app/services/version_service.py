@@ -130,16 +130,20 @@ class VersionService:
 
         def _log():
             versions = []
-            for commit in repo.iter_commits("HEAD"):
-                tags = [t.name for t in repo.tags if t.commit.hexsha == commit.hexsha]
-                versions.append({
-                    "version_id": commit.hexsha,
-                    "short_id": commit.hexsha[:7],
-                    "message": commit.message.strip(),
-                    "committed_at": datetime.fromtimestamp(commit.committed_date, tz=timezone.utc).isoformat(),
-                    "author": commit.author.name,
-                    "tags": tags,
-                })
+            try:
+                for commit in repo.iter_commits("HEAD"):
+                    tags = [t.name for t in repo.tags if t.commit.hexsha == commit.hexsha]
+                    versions.append({
+                        "version_id": commit.hexsha,
+                        "short_id": commit.hexsha[:7],
+                        "message": commit.message.strip(),
+                        "committed_at": datetime.fromtimestamp(commit.committed_date, tz=timezone.utc).isoformat(),
+                        "author": commit.author.name,
+                        "tags": tags,
+                    })
+            except git.GitCommandError:
+                # No commits yet
+                pass
             return versions
 
         return await asyncio.to_thread(_log)
