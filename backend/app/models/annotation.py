@@ -2,12 +2,22 @@
 
 import uuid
 from datetime import datetime
+from enum import Enum
 
 from sqlalchemy import ForeignKey, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.database import Base
+
+
+class AnnotationStatus(str, Enum):
+    """Review status of an annotation."""
+
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    IGNORED = "ignored"
+    MODIFIED = "modified"
 
 
 class Annotation(Base):
@@ -28,6 +38,7 @@ class Annotation(Base):
     alternatives: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     confidence: Mapped[float]
     auto_applied: Mapped[bool] = mapped_column(default=False)
+    status: Mapped[str] = mapped_column(String(20), default=AnnotationStatus.PENDING)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(
         server_default=func.now(),
