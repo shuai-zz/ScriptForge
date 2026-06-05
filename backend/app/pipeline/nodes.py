@@ -174,3 +174,59 @@ async def stage_0_bible(state: ConversionState, config: RunnableConfig) -> dict:
             },
         },
     }
+
+
+def quality_gate_0(state: ConversionState) -> dict:
+    """Stage 0 quality gate: verify Story Bible has at least 1 key character.
+
+    Updates quality_checks and retry_counts in state.
+    Conditional edges (wired in 5.9) read quality_checks["stage_0"].passed
+    to route to retry, human_intervention, or stage_1.
+    """
+    story_bible = state.get("story_bible")
+    retry_counts = state.get("retry_counts", {})
+    current_retry = retry_counts.get("stage_0", 0)
+
+    issues: list[str] = []
+    passed = False
+
+    if not story_bible:
+        issues.append("Story Bible 未生成。")
+    else:
+        char_network = story_bible.get("character_network", {})
+        nodes = char_network.get("nodes", [])
+        if len(nodes) < 1:
+            issues.append("未识别到任何关键角色（至少需要 1 个）。")
+        else:
+            passed = True
+
+    new_retry_count = current_retry
+    if not passed:
+        new_retry_count = current_retry + 1
+
+    next_status = state.get("status", "running")
+    if not passed and new_retry_count >= 3:
+        next_status = "paused"
+        issues.append("Stage 0 质量检查连续 3 次未通过，需要人工干预。")
+
+    return {
+        "quality_checks": {
+            "stage_0": {
+                "passed": passed,
+                "issues": issues,
+                "retry_count": new_retry_count,
+            }
+        },
+        "retry_counts": {"stage_0": new_retry_count},
+        "status": next_status,
+        "progress": {
+            "current_stage": "quality_gate_0",
+            "percent": 22 if passed else 20,
+            "message": "Stage 0 质量检查通过" if passed else "Stage 0 质量检查未通过",
+            "details": {
+                "passed": passed,
+                "retry_count": new_retry_count,
+                "issues": issues,
+            },
+        },
+    }
