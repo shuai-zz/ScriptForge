@@ -1,6 +1,7 @@
 """LangGraph pipeline nodes — Stage 0, Stage 1, Stage 2, and utilities."""
 
 import json
+import re
 
 import yaml
 from langchain_core.messages import HumanMessage
@@ -13,6 +14,109 @@ from app.schemas.story_bible import StoryBibleV1
 from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
 from app.services.prompt_registry import PromptRegistry
 from app.services.validators import ValidatorRunner
+
+
+# ── Stage 0 helpers ──
+
+_VALID_TIME_LABELS = {"now", "flashback", "flashforward"}
+_VALID_TIME_OF_DAY = {
+    "dawn", "morning", "afternoon", "dusk", "evening", "night", "midnight"
+}
+
+
+def _coerce_chapter_int(value, default: int = 1) -> int:
+    """Coerce a chapter value (e.g. '第1章', '1', 1) to a positive integer."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value >= 1 else default
+    if isinstance(value, str):
+        m = re.search(r"\d+", value)
+        if m:
+            n = int(m.group())
+            return n if n >= 1 else default
+    return default
+
+
+def _normalize_story_bible(data: dict) -> dict:
+    """Best-effort normalization of LLM output into the StoryBibleV1 shape.
+
+    LLMs frequently drift from the schema (wrong field names, '第N章' strings,
+    missing ids/enums). Map the common deviations so a finished analysis isn't
+    lost to a single field mismatch. Correct fields are left untouched, and
+    unknown extras are harmless (the models allow extra).
+    """
+    if not isinstance(data, dict):
+        return data
+
+    # Timeline events: fill required fields, alias common variants, coerce chapter.
+    timeline = data.get("timeline")
+    if isinstance(timeline, list):
+        for i, ev in enumerate(timeline):
+            if not isinstance(ev, dict):
+                continue
+            ev.setdefault("event_id", f"evt-{i + 1}")
+            if not ev.get("description"):
+                ev["description"] = (
+                    ev.get("event") or ev.get("summary") or ev.get("title") or ""
+                )
+            if ev.get("time_label") not in _VALID_TIME_LABELS:
+                ev["time_label"] = "now"
+            if ev.get("time_of_day") not in _VALID_TIME_OF_DAY:
+                ev["time_of_day"] = "afternoon"
+            ev["chapter"] = _coerce_chapter_int(ev.get("chapter"))
+
+    # Themes: fill required fields, alias title -> name.
+    themes = data.get("themes")
+    if isinstance(themes, list):
+        for i, th in enumerate(themes):
+            if not isinstance(th, dict):
+                continue
+            th.setdefault("theme_id", f"theme-{i + 1}")
+            if not th.get("name"):
+                th["name"] = th.get("title") or th.get("theme") or f"主题 {i + 1}"
+            if not th.get("description"):
+                th["description"] = th.get("summary") or th.get("title") or ""
+
+    # Chapter synopses: coerce chapter_number.
+    synopses = data.get("chapter_synopses")
+    if isinstance(synopses, list):
+        for ch in synopses:
+            if isinstance(ch, dict) and "chapter_number" in ch:
+                ch["chapter_number"] = _coerce_chapter_int(ch.get("chapter_number"))
+
+    # Foreshadowing: ensure id + coerce chapter fields.
+    foreshadowing = data.get("foreshadowing_tracking")
+    if isinstance(foreshadowing, list):
+        for i, item in enumerate(foreshadowing):
+            if not isinstance(item, dict):
+                continue
+            item.setdefault("item_id", f"fs-{i + 1}")
+            if "setup_chapter" in item:
+                item["setup_chapter"] = _coerce_chapter_int(item.get("setup_chapter"))
+            if item.get("payoff_chapter") is not None:
+                item["payoff_chapter"] = _coerce_chapter_int(item.get("payoff_chapter"))
+
+    # Location index: coerce first_chapter.
+    locations = data.get("location_index")
+    if isinstance(locations, list):
+        for loc in locations:
+            if isinstance(loc, dict) and "first_chapter" in loc:
+                loc["first_chapter"] = _coerce_chapter_int(loc.get("first_chapter"))
+
+    # overall_synopsis is required — synthesize from real chapter summaries when
+    # the model omitted it. Only do so if there is genuine content to summarize;
+    # truly empty/garbage output is left to fail validation.
+    if not data.get("overall_synopsis"):
+        summaries = [
+            s.get("summary", "")
+            for s in (data.get("chapter_synopses") or [])
+            if isinstance(s, dict) and s.get("summary")
+        ]
+        if summaries:
+            data["overall_synopsis"] = " ".join(summaries).strip()[:1000]
+
+    return data
 
 
 # ── Stage 0 ──
@@ -152,6 +256,7 @@ async def stage_0_bible(state: ConversionState, config: RunnableConfig) -> dict:
             json_str = content.split("```")[1].split("```")[0].strip()
 
         data = json.loads(json_str)
+        data = _normalize_story_bible(data)
         story_bible = StoryBibleV1.model_validate(data)
     except Exception as exc:
         return {

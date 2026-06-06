@@ -67,16 +67,47 @@ PromptRegistry.register(
         required_vars=["novel_text"],
         template="""你是一位专业编剧，正在将一部小说改编为剧本。请分析以下小说文本，生成一份结构化的「故事圣经」(Story Bible)。
 
-分析要求：
-1. 识别所有有名字的角色（ protagonist / antagonist / supporting / minor 四级分类）
-2. 构建角色关系网络（关系类型、强度 1-5、关键节点）
-3. 梳理时间线（标注闪回/闪前、时间点、触发事件）
-4. 提炼 1-3 个核心主题，每个主题附文本证据和视觉化建议
-5. 追踪伏笔（setup/payoff 对）
-6. 建立地点索引（首次出现章节、关键道具）
-7. 每章摘要（≤5 个关键事件，标注 major/minor/setup/payoff）
+请**只输出一个 JSON 对象**（不要 markdown 代码块、不要任何解释文字），严格使用下列字段名与结构：
 
-请严格按照 story-bible-v1.yaml schema 的 JSON 格式输出。
+{{
+  "overall_synopsis": "<整部作品的整体剧情概要，一段话>",
+  "chapter_synopses": [
+    {{"chapter_number": 1, "summary": "<本章摘要>", "key_events": [{{"description": "<关键事件>", "significance": "major"}}], "new_characters": [], "new_locations": [], "foreshadowing_setups": [], "foreshadowing_payoffs": []}}
+  ],
+  "character_network": {{
+    "nodes": [{{"character_id": "c1", "name": "<角色名>", "role_type": "protagonist"}}],
+    "edges": [{{"source": "c1", "target": "c2", "type": "friend", "intensity": 3, "key_moments": []}}]
+  }},
+  "timeline": [
+    {{"event_id": "evt-1", "time_label": "now", "description": "<事件描述>", "time_of_day": "afternoon", "duration": null, "trigger_events": [], "chapter": 1}}
+  ],
+  "themes": [
+    {{"theme_id": "theme-1", "name": "<主题名>", "description": "<主题阐述>", "textual_instances": [], "visual_motifs": []}}
+  ],
+  "foreshadowing_tracking": [
+    {{"item_id": "fs-1", "setup_chapter": 1, "description": "<伏笔描述>", "status": "unresolved", "payoff_chapter": null}}
+  ],
+  "location_index": [
+    {{"location_id": "loc-1", "name": "<地点名>", "description": "<描述>", "key_props": [], "first_chapter": 1, "scenes": []}}
+  ]
+}}
+
+字段取值约束（务必遵守，否则解析会失败）：
+- overall_synopsis：必填，不可省略。
+- role_type ∈ protagonist | antagonist | supporting | minor
+- edges.type ∈ lover | family | friend | rival | mentor | enemy | colleague | other；intensity 为 1-5 的整数
+- time_label ∈ now | flashback | flashforward
+- time_of_day ∈ dawn | morning | afternoon | dusk | evening | night | midnight
+- significance ∈ major | minor | setup | payoff
+- status ∈ unresolved | resolved
+- 所有 chapter / chapter_number / setup_chapter / payoff_chapter / first_chapter 必须是**整数**（例如 1、2、3），不要写「第1章」之类的字符串。
+- 每个 timeline 事件必须含 event_id、time_label、description、time_of_day、chapter；每个 theme 必须含 theme_id、name、description。
+
+分析要求：
+1. 识别所有有名字的角色并分级（protagonist/antagonist/supporting/minor），构建角色关系网络。
+2. 梳理时间线（标注闪回/闪前、时间点、触发事件）。
+3. 提炼 1-3 个核心主题，每个附文本证据和视觉化建议。
+4. 追踪伏笔（setup/payoff 对）、建立地点索引、每章摘要（≤5 个关键事件）。
 
 ---
 
