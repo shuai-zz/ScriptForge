@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.routers import annotations, chapters, characters, conversion, export, projects, providers, story_bibles, versions
+from app.routers import annotations, chapters, characters, conversion, export, projects, providers, scripts, story_bibles, versions
 
 app = FastAPI(
     title="ScriptForge API",
@@ -30,6 +30,7 @@ app.include_router(annotations.router)
 app.include_router(versions.router)
 app.include_router(export.router)
 app.include_router(conversion.router)
+app.include_router(scripts.router)
 app.include_router(story_bibles.router)
 
 register_exception_handlers(app)
