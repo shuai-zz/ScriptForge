@@ -105,3 +105,46 @@ def test_normalize_handles_invalid_enum_values():
     sb = StoryBibleV1.model_validate(_normalize_story_bible(data))
     assert sb.timeline[0].time_label.value == "now"
     assert sb.timeline[0].time_of_day.value == "afternoon"
+
+
+def test_normalize_coerces_object_lists_to_strings():
+    """Second real failure: model emitted full objects where list[str] was expected
+    (new_characters / new_locations / foreshadowing_setups / textual_instances)."""
+    data = {
+        "overall_synopsis": "x",
+        "chapter_synopses": [
+            {
+                "chapter_number": 1,
+                "summary": "s1",
+                "new_characters": [
+                    {"character_id": "c1", "name": "汪淼", "role_type": "protagonist"}
+                ],
+            },
+            {
+                "chapter_number": 2,
+                "summary": "s2",
+                "new_characters": [
+                    {"character_id": "c2", "name": "丁仪", "role_type": "supporting"}
+                ],
+                "new_locations": [
+                    {"location_id": "loc-1", "name": "台球厅", "first_chapter": 2, "scenes": []}
+                ],
+            },
+            {
+                "chapter_number": 3,
+                "summary": "s3",
+                "foreshadowing_setups": [
+                    {"item_id": "fs-1", "description": "倒计时", "setup_chapter": 1, "payoff_chapter": None}
+                ],
+            },
+        ],
+        "themes": [
+            {"theme_id": "t1", "name": "n", "description": "d", "textual_instances": [{"quote": "原文片段"}]}
+        ],
+    }
+    sb = StoryBibleV1.model_validate(_normalize_story_bible(data))
+    assert sb.chapter_synopses[0].new_characters == ["汪淼"]
+    assert sb.chapter_synopses[1].new_characters == ["丁仪"]
+    assert sb.chapter_synopses[1].new_locations == ["台球厅"]
+    assert sb.chapter_synopses[2].foreshadowing_setups == ["倒计时"]
+    assert sb.themes[0].textual_instances == ["原文片段"]  # fallback to first string value

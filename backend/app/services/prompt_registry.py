@@ -102,6 +102,7 @@ PromptRegistry.register(
 - status ∈ unresolved | resolved
 - 所有 chapter / chapter_number / setup_chapter / payoff_chapter / first_chapter 必须是**整数**（例如 1、2、3），不要写「第1章」之类的字符串。
 - 每个 timeline 事件必须含 event_id、time_label、description、time_of_day、chapter；每个 theme 必须含 theme_id、name、description。
+- 以下列表的元素都是**字符串**（名称或简短描述），不要放对象/字典：new_characters、new_locations、foreshadowing_setups、foreshadowing_payoffs、textual_instances、visual_motifs、trigger_events、key_moments、key_props、scenes。
 
 分析要求：
 1. 识别所有有名字的角色并分级（protagonist/antagonist/supporting/minor），构建角色关系网络。

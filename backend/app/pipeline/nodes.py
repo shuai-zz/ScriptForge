@@ -38,6 +38,57 @@ def _coerce_chapter_int(value, default: int = 1) -> int:
     return default
 
 
+# Fields that are list[str] in StoryBibleV1 but where the LLM frequently emits
+# full objects instead of plain names — coerce each element back to a string.
+_STR_LIST_FIELDS = {
+    "new_characters",
+    "new_locations",
+    "foreshadowing_setups",
+    "foreshadowing_payoffs",
+    "textual_instances",
+    "visual_motifs",
+    "trigger_events",
+    "key_moments",
+    "key_props",
+    "scenes",
+}
+
+
+def _str_item(item):
+    """Reduce a value to a representative string (LLMs sometimes nest objects)."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for key in (
+            "name", "description", "title", "label", "summary",
+            "character_id", "location_id", "item_id", "id",
+        ):
+            if item.get(key):
+                return str(item[key])
+        for value in item.values():
+            if isinstance(value, str) and value:
+                return value
+        return str(item)
+    return str(item)
+
+
+def _stringify_list(value):
+    return [_str_item(x) for x in value] if isinstance(value, list) else value
+
+
+def _coerce_str_lists(obj) -> None:
+    """Recursively coerce known list[str] fields whose elements are objects."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in _STR_LIST_FIELDS and isinstance(value, list):
+                obj[key] = _stringify_list(value)
+            else:
+                _coerce_str_lists(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            _coerce_str_lists(item)
+
+
 def _normalize_story_bible(data: dict) -> dict:
     """Best-effort normalization of LLM output into the StoryBibleV1 shape.
 
@@ -48,6 +99,9 @@ def _normalize_story_bible(data: dict) -> dict:
     """
     if not isinstance(data, dict):
         return data
+
+    # Coerce any list[str] fields the model populated with objects (recursively).
+    _coerce_str_lists(data)
 
     # Timeline events: fill required fields, alias common variants, coerce chapter.
     timeline = data.get("timeline")
