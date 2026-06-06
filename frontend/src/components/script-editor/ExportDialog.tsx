@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
-import { Download, FileText, FileCode, FileType, FileArchive, X, Check, Loader2 } from "lucide-react";
+import { Download, FileText, FileCode, FileType, X, Check, Loader2 } from "lucide-react";
 
 const API_BASE = "/api";
 
