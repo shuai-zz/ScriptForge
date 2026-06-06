@@ -508,24 +508,25 @@ export default function ScriptEditor() {
             ))}
           </div>
         </main>
-      </div>
 
-      {/* Right sidebar */}
-      {!focusMode && (
-        <AnnotationSidebar
-          annotations={annotations}
-          activeBlockId={selectedBlockId}
-          onHoverAnnotation={(blockId) => setHoveredBlockId(blockId)}
-          onClickAnnotation={(blockId) => {
-            setSelectedBlockId(blockId);
-            const scene = script.scenes.find((s) => s.blocks.some((b) => b.block_id === blockId));
-            if (scene) setActiveSceneId(scene.scene_id);
-          }}
-          onAccept={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "accepted" as const } : a))}
-          onIgnore={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignored" as const } : a))}
-          onApplyAlternative={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "modified" as const } : a))}
-        />
-      )}
+        {/* Right sidebar — must live inside the flex row, otherwise it becomes a
+            column sibling that steals the editor's height and leaves a blank area */}
+        {!focusMode && (
+          <AnnotationSidebar
+            annotations={annotations}
+            activeBlockId={selectedBlockId}
+            onHoverAnnotation={(blockId) => setHoveredBlockId(blockId)}
+            onClickAnnotation={(blockId) => {
+              setSelectedBlockId(blockId);
+              const scene = script.scenes.find((s) => s.blocks.some((b) => b.block_id === blockId));
+              if (scene) setActiveSceneId(scene.scene_id);
+            }}
+            onAccept={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "accepted" as const } : a))}
+            onIgnore={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignored" as const } : a))}
+            onApplyAlternative={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "modified" as const } : a))}
+          />
+        )}
+      </div>
 
       {/* Command palette */}
       <CommandPalette
