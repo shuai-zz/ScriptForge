@@ -1,8 +1,10 @@
 """Conversion pipeline endpoints: SSE streaming progress."""
 
 import json
+import logging
 import uuid
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.runnables import RunnableConfig
@@ -13,8 +15,12 @@ from app.database import async_session_factory
 from app.models.chapter import Chapter
 from app.models.conversion import ConversionRun, LLMProvider
 from app.models.project import Project
+from app.models.script import Script
 from app.pipeline.graph import build_conversion_graph
 from app.pipeline.state import ConversionState
+from app.schemas.script import ScriptV1
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{project_id}/convert", tags=["conversion"])
 
@@ -145,6 +151,10 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
                 run.stage = final_stage
                 run.error_message = final_error
                 await db.commit()
+
+        # Persist the assembled script once the run has completed
+        if final_status == "completed":
+            await _persist_script(project_id, graph, config)
 
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
@@ -326,6 +336,10 @@ async def resume_conversion(
                 run.error_message = final_error
                 await db.commit()
 
+        # Persist the assembled script once the run has completed
+        if final_status == "completed":
+            await _persist_script(project_id, graph, config)
+
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
         )
@@ -395,3 +409,46 @@ async def _load_project_providers(
                 provider_assignments[stage] = first_id
 
     return project, chapters, providers, provider_assignments
+
+
+async def _persist_script(
+    project_id: uuid.UUID, graph, config: RunnableConfig
+) -> None:
+    """Persist the assembled ScriptV1 to the ``scripts`` table (upsert by project).
+
+    Best-effort: reads the final pipeline state from the graph checkpointer and
+    writes the YAML. Any failure is logged but never propagated — persistence
+    must not break a finished conversion.
+    """
+    try:
+        snapshot = await graph.aget_state(config)
+        assembled = (snapshot.values or {}).get("assembled_script")
+        if not assembled:
+            return
+        script = ScriptV1.model_validate(assembled)
+        script_json = script.model_dump(mode="json")
+        yaml_str = yaml.safe_dump(
+            script_json,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(Script).where(Script.project_id == project_id)
+            )
+            row = result.scalar_one_or_none()
+            if row:
+                row.yaml_content = yaml_str
+                row.script_metadata = script_json.get("metadata")
+            else:
+                db.add(
+                    Script(
+                        project_id=project_id,
+                        yaml_content=yaml_str,
+                        script_metadata=script_json.get("metadata"),
+                    )
+                )
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to persist script for project %s", project_id)
