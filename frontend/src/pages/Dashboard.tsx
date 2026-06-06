@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -159,9 +160,7 @@ export default function Dashboard() {
 
       {/* Loading */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <PageLoader />
       ) : error && projects.length === 0 ? (
         /* Error state */
         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-error/30 bg-error/5 py-20">

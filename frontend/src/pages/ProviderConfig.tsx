@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
@@ -239,9 +240,7 @@ export default function ProviderConfig() {
 
       {/* Provider List */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <PageLoader />
       ) : providers.length === 0 ? (
         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-surface py-20">
           <Bot className="h-12 w-12 text-text-muted" />

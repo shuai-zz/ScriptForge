@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Cog, Save } from "lucide-react";
 import { useToast } from "../components/ToastContainer";
@@ -138,9 +139,7 @@ export default function ProjectSettings() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
+      <PageLoader />
     );
   }
 

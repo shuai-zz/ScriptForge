@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useParams } from "react-router-dom";
 import { Users, Plus, Trash2, X, Network } from "lucide-react";
 import { useToast } from "@/components/ToastContainer";
@@ -161,9 +162,7 @@ export default function CharactersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
+      <PageLoader />
     );
   }
 
