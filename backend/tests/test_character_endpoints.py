@@ -92,3 +92,24 @@ class TestCreateRelationship:
         data = response.json()
         message = data["error"]["message"]
         assert "source_character_id" in message and "target_character_id" in message
+
+
+class TestListRelationships:
+    """GET /api/projects/{id}/characters/relationships"""
+
+    @patch("app.routers.characters.CharacterRelationshipService.list_by_project")
+    def test_route_not_shadowed_by_character_id(self, mock_list, client, mock_db):
+        # Regression: the literal /relationships route must be matched before
+        # /{character_id}. If /{character_id} wins, "relationships" fails UUID
+        # validation and this returns 422 instead of the relationship list,
+        # which breaks the character graph.
+        mock_list.return_value = []
+        project_id = uuid.uuid4()
+
+        response = client.get(
+            f"/api/projects/{project_id}/characters/relationships"
+        )
+
+        assert response.status_code == 200
+        assert response.json() == []
+        mock_list.assert_called_once()

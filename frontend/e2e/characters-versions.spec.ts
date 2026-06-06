@@ -24,19 +24,17 @@ test.describe("Characters and Versions", () => {
     await page.goto(`/projects/${projectId}/characters`);
     await expect(page.locator("text=角色管理")).toBeVisible();
 
-    // Create first character
+    // Create first character (fill the form, then save — create-on-save)
     await page.click("text=新建角色");
+    await page.fill("#char-name", "张三");
+    await page.getByRole("button", { name: "保存" }).click();
     await expect(page.getByText(/角色.*已创建/)).toBeVisible({ timeout: 10000 });
-
-    // Close edit mode by clicking "取消"
-    await page.getByRole("button", { name: "取消" }).click();
 
     // Create second character
     await page.click("text=新建角色");
+    await page.fill("#char-name", "李四");
+    await page.getByRole("button", { name: "保存" }).click();
     await expect(page.getByText(/角色.*已创建/)).toBeVisible({ timeout: 10000 });
-
-    // Close edit mode
-    await page.getByRole("button", { name: "取消" }).click();
 
     // Select first character and add relationship
     await page.locator("[data-char-id]").first().click();
