@@ -166,7 +166,7 @@ async def stage_0_bible(state: ConversionState, config: RunnableConfig) -> dict:
         }
 
     return {
-        "story_bible": story_bible.model_dump(),
+        "story_bible": story_bible.model_dump(mode="json"),
         "status": "running",
         "progress": {
             "current_stage": "stage_0_bible",

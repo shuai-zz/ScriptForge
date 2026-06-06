@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import { useParams } from "react-router-dom";
 import type { ScriptV1, ScriptBlock, Scene } from "@/types/script";
 import SceneTimeline from "@/components/script-editor/SceneTimeline";
 import SceneNav from "@/components/script-editor/SceneNav";
@@ -6,8 +7,9 @@ import SceneContainer from "@/components/script-editor/SceneContainer";
 import CommandPalette from "@/components/script-editor/CommandPalette";
 import AnnotationSidebar from "@/components/script-editor/AnnotationSidebar";
 import ExportDialog from "@/components/script-editor/ExportDialog";
+import { useToast } from "@/components/ToastContainer";
 import { cn } from "@/lib/utils";
-import { Keyboard, Maximize2, Minimize2, Download } from "lucide-react";
+import { Keyboard, Maximize2, Minimize2, Download, X, Loader2, GitCommit } from "lucide-react";
 
 /** Demo script for preview (Phase 7 placeholder data) */
 function makeDemoScript(): ScriptV1 {
@@ -222,6 +224,9 @@ function makeDemoAnnotations() {
 }
 
 export default function ScriptEditor() {
+  const { projectId } = useParams<{ projectId: string }>();
+  const { toast } = useToast();
+
   const [script, setScript] = useState<ScriptV1>(makeDemoScript);
   const [annotations, setAnnotations] = useState<any[]>(makeDemoAnnotations);
   const [activeSceneId, setActiveSceneId] = useState<string | null>("s1");
@@ -230,6 +235,9 @@ export default function ScriptEditor() {
   const [focusMode, setFocusMode] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [checkpointOpen, setCheckpointOpen] = useState(false);
+  const [checkpointMessage, setCheckpointMessage] = useState("");
+  const [checkpointSaving, setCheckpointSaving] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
   /** ---- Block operations ---- */
@@ -341,6 +349,36 @@ export default function ScriptEditor() {
     setActiveSceneId(newScene.scene_id);
   }, []);
 
+  /** ---- Checkpoint ---- */
+  const openCheckpoint = useCallback(() => {
+    setCheckpointMessage("");
+    setCheckpointOpen(true);
+  }, []);
+
+  const createCheckpoint = useCallback(async () => {
+    if (!projectId) return;
+    setCheckpointSaving(true);
+    try {
+      const yaml = "# ScriptForge checkpoint\n" + JSON.stringify(script, null, 2);
+      const res = await fetch(`/api/projects/${projectId}/versions/checkpoint`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          yaml_content: yaml,
+          message: checkpointMessage.trim() || "手动存档",
+          tag: null,
+        }),
+      });
+      if (!res.ok) throw new Error("Checkpoint failed");
+      toast("success", "存档已保存");
+      setCheckpointOpen(false);
+    } catch {
+      toast("error", "存档失败");
+    } finally {
+      setCheckpointSaving(false);
+    }
+  }, [projectId, script, checkpointMessage, toast]);
+
   /** ---- Keyboard shortcuts ---- */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -354,12 +392,12 @@ export default function ScriptEditor() {
       }
       if (e.key === "s" && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
-        // TODO: trigger auto-save / checkpoint
+        openCheckpoint();
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [openCheckpoint]);
 
   /** ---- Scroll to active scene ---- */
   useEffect(() => {
@@ -500,7 +538,7 @@ export default function ScriptEditor() {
         }))}
         onClose={() => setCommandOpen(false)}
         onNavigateScene={setActiveSceneId}
-        onCreateCheckpoint={() => { /* TODO */ }}
+        onCreateCheckpoint={openCheckpoint}
         onExport={() => setExportOpen(true)}
         onToggleFocus={() => setFocusMode((v) => !v)}
       />
@@ -508,9 +546,61 @@ export default function ScriptEditor() {
       {/* Export dialog */}
       <ExportDialog
         open={exportOpen}
-        projectId="demo-project"
+        projectId={projectId ?? "demo-project"}
         onClose={() => setExportOpen(false)}
       />
+
+      {/* Checkpoint modal */}
+      {checkpointOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
+          <div className="w-full max-w-md overflow-hidden rounded-xl border border-border bg-surface shadow-2xl">
+            <div className="flex items-center justify-between border-b border-border px-4 py-3">
+              <div className="flex items-center gap-2 text-sm font-bold text-foreground">
+                <GitCommit size={16} />
+                创建存档点
+              </div>
+              <button
+                className="rounded p-1 text-muted hover:bg-accent hover:text-foreground"
+                onClick={() => setCheckpointOpen(false)}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="px-4 py-3">
+              <label className="mb-1.5 block text-xs text-muted">存档说明</label>
+              <input
+                type="text"
+                value={checkpointMessage}
+                onChange={(e) => setCheckpointMessage(e.target.value)}
+                placeholder="例如：修改对白后存档"
+                className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-foreground outline-none focus:border-border-active"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-2 border-t border-border px-4 py-3">
+              <button
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted hover:bg-accent hover:text-foreground"
+                onClick={() => setCheckpointOpen(false)}
+              >
+                取消
+              </button>
+              <button
+                disabled={checkpointSaving}
+                className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-black hover:bg-primary-hover disabled:opacity-60"
+                onClick={createCheckpoint}
+              >
+                {checkpointSaving ? (
+                  <>
+                    <Loader2 size={14} className="animate-spin" />
+                    保存中...
+                  </>
+                ) : (
+                  "保存存档"
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

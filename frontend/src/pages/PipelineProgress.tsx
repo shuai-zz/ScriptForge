@@ -1,3 +1,4 @@
+import { motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
@@ -212,12 +213,14 @@ export default function PipelineProgress() {
             status === "completed" || (isPast && status !== "idle");
 
           return (
-            <div
+            <motion.div
               key={s.key}
-              className={`relative overflow-hidden rounded-xl border bg-surface p-5 shadow-card transition-all ${
+              animate={isActive ? { scale: [1, 1.02, 1] } : {}}
+              transition={isActive ? { repeat: Infinity, duration: 2, ease: "easeInOut" } : {}}
+              className={`relative overflow-hidden rounded-xl border bg-neutral-900 p-5 shadow-md transition-colors ${
                 isActive
-                  ? `${s.border} shadow-card-hover`
-                  : "border-border"
+                  ? `${s.border} shadow-lg`
+                  : "border-neutral-800"
               }`}
             >
               {/* Active glow line */}
@@ -288,7 +291,7 @@ export default function PipelineProgress() {
                   </div>
                 );
               })()}
-            </div>
+            </motion.div>
           );
         })}
       </div>

@@ -118,6 +118,7 @@ export default function DialogueBlock({
       {/* Dialogue line */}
       <div
         ref={lineRef}
+        data-testid="dialogue-line"
         className="min-h-[1.5em] whitespace-pre-wrap font-body text-sm leading-relaxed text-foreground outline-none"
         contentEditable={!readOnly}
         suppressContentEditableWarning

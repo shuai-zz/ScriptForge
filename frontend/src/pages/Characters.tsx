@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useParams } from "react-router-dom";
 import { Users, Plus, Trash2, X, Network } from "lucide-react";
 import { useToast } from "@/components/ToastContainer";
 import { cn } from "@/lib/utils";
 import CharacterGraph from "@/components/CharacterGraph";
+import { EmptyState } from "@/components/EmptyState";
 
 interface CharacterItem {
   id: string;
@@ -161,9 +163,7 @@ export default function CharactersPage() {
 
   if (loading) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
+      <PageLoader />
     );
   }
 
@@ -217,7 +217,10 @@ export default function CharactersPage() {
           <div className="w-64 border-r border-border bg-surface">
             <div className="p-2">
               {characters.length === 0 ? (
-                <p className="px-2 py-4 text-center text-xs text-text-muted">暂无角色</p>
+                <EmptyState
+                  title="暂无角色"
+                  description="添加角色以管理人物信息和关系网络。"
+                />
               ) : (
                 <div className="space-y-1">
                   {characters.map((c) => (

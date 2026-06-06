@@ -52,6 +52,7 @@ class ConversionState(TypedDict, total=False):
 
     # ── Inputs ──
     chapters: list[ChapterInput]
+    chapter_number: int | None  # injected by Send during stage_1 map
 
     # ── Stage 0 outputs ──
     story_bible: dict | None

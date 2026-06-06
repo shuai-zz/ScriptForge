@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { PageLoader } from "@/components/PageLoader";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
@@ -9,6 +10,9 @@ import {
   X,
 } from "lucide-react";
 import { useToast } from "../components/ToastContainer";
+import { EmptyState } from "@/components/EmptyState";
+import { motion } from "framer-motion";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 interface ProjectCard {
   id: string;
@@ -159,9 +163,7 @@ export default function Dashboard() {
 
       {/* Loading */}
       {loading ? (
-        <div className="flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        </div>
+        <PageLoader />
       ) : error && projects.length === 0 ? (
         /* Error state */
         <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-error/30 bg-error/5 py-20">
@@ -174,27 +176,32 @@ export default function Dashboard() {
           </button>
         </div>
       ) : projects.length === 0 ? (
-        /* Empty state */
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-surface py-20">
-          <Clapperboard className="h-12 w-12 text-text-muted" />
-          <p className="text-text-secondary">还没有项目</p>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-text-primary transition-colors hover:border-primary/30"
-          >
-            创建第一个项目
-          </button>
-        </div>
+        <EmptyState
+          icon={<Clapperboard className="h-12 w-12" />}
+          title="还没有项目"
+          description="创建一个新项目，开始将小说转换为剧本。"
+          action={
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500"
+            >
+              创建第一个项目
+            </button>
+          }
+        />
       ) : (
         /* Project Grid */
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {projects.map((p) => {
             const progress = getProgress(p);
             return (
-              <div
+              <motion.div
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="group relative cursor-pointer overflow-hidden rounded-xl border border-border bg-surface p-6 shadow-card transition-all hover:border-primary/20 hover:shadow-card-hover"
+                whileHover={{ y: -4, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="group relative cursor-pointer overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-md transition-colors hover:border-amber-600/30 hover:shadow-lg"
               >
                 {/* Top glow line */}
                 <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
@@ -264,7 +271,7 @@ export default function Dashboard() {
                     {STATUS_LABELS[p.status] || p.status}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
@@ -398,6 +405,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      <OnboardingWizard />
     </div>
   );
 }
