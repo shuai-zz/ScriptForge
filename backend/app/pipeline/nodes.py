@@ -12,6 +12,7 @@ from app.schemas.script import Scene, ScriptMetadata, ScriptV1
 from app.schemas.story_bible import StoryBibleV1
 from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
 from app.services.prompt_registry import PromptRegistry
+from app.services.validators import ValidatorRunner
 
 
 # ── Stage 0 ──
@@ -452,26 +453,26 @@ def stage_2_assemble(state: ConversionState) -> dict:
 def quality_gate_2(state: ConversionState) -> dict:
     """Stage 2 quality gate: validate assembled screenplay.
 
-    Checks:
+    Runs semantic validators (Group 11) plus legacy structural checks:
       - Scene count >= 10
-      - Character consistency (all char_ids in script exist in Story Bible)
-      - Basic timeline coherence placeholder (full validators in Group 11)
+      - Character consistency via Story Bible
+      - Full validator suite (slug, continuity, timeline, alternation, etc.)
 
     Unlike Stage 0, failures here are flagged as issues rather than
     triggering automatic retries — the assemble node is deterministic.
     Conditional edges route to format_output (pass) or flag_issues (fail).
     """
-    script = state.get("assembled_script")
+    script_dict = state.get("assembled_script")
     story_bible = state.get("story_bible", {})
 
     issues: list[str] = []
     passed = True
 
-    if not script:
+    if not script_dict:
         issues.append("剧本未组装。")
         passed = False
     else:
-        scenes = script.get("scenes", [])
+        scenes = script_dict.get("scenes", [])
 
         # Scene count
         if len(scenes) < 10:
@@ -480,7 +481,7 @@ def quality_gate_2(state: ConversionState) -> dict:
             )
             passed = False
 
-        # Character consistency
+        # Character consistency (Story Bible cross-check)
         char_ids_in_script: set[str] = set()
         for scene in scenes:
             for block in scene.get("blocks", []):
@@ -500,18 +501,22 @@ def quality_gate_2(state: ConversionState) -> dict:
             )
             passed = False
 
-        # Timeline coherence (placeholder — full validators in Group 11)
-        # Naive check: flag same-location scenes with large time jumps
-        for i in range(1, len(scenes)):
-            prev = scenes[i - 1].get("slug", {})
-            curr = scenes[i].get("slug", {})
-            if (
-                prev.get("location_name") == curr.get("location_name")
-                and prev.get("time") != curr.get("time")
-                and {prev.get("time"), curr.get("time")} == {"NIGHT", "DAY"}
-            ):
-                # This is a very coarse heuristic; semantic validators will refine
-                pass
+        # ── Semantic validators (Group 11) ──
+        try:
+            script = ScriptV1.model_validate(script_dict)
+            runner = ValidatorRunner()
+            report = runner.run(script)
+
+            for finding in report.errors:
+                issues.append(f"[错误] {finding.validator}: {finding.message}")
+                passed = False
+            for finding in report.warnings:
+                issues.append(f"[警告] {finding.validator}: {finding.message}")
+            for finding in report.infos:
+                issues.append(f"[提示] {finding.validator}: {finding.message}")
+        except Exception as exc:
+            # Validator failure should not block the pipeline
+            issues.append(f"语义校验器运行异常: {exc}")
 
     return {
         "quality_checks": {
