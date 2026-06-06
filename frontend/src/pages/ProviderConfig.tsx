@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { PageLoader } from "@/components/PageLoader";
-import { useParams, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft,
   Bot,
@@ -70,7 +70,6 @@ const DEFAULT_FORM: FormData = {
 };
 
 export default function ProviderConfig() {
-  const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
 
   const [providers, setProviders] = useState<Provider[]>([]);
@@ -81,7 +80,7 @@ export default function ProviderConfig() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  const apiBase = `/api/projects/${projectId}/providers`;
+  const apiBase = "/api/providers";
 
   const fetchProviders = useCallback(async () => {
     setLoading(true);
@@ -144,9 +143,8 @@ export default function ProviderConfig() {
       },
     };
 
-    if (form.provider_type === "openai_compatible") {
-      payload.base_url = form.base_url || null;
-    }
+    // base_url is optional for all provider types (proxy / self-hosted / OpenAI-compatible)
+    payload.base_url = form.base_url || null;
 
     if (editingId) {
       if (form.api_key) payload.api_key = form.api_key;
@@ -224,7 +222,7 @@ export default function ProviderConfig() {
               模型配置
             </h1>
             <p className="mt-1 text-sm text-text-secondary">
-              管理项目的 LLM 提供商与阶段分配
+              全局 LLM 提供商与阶段分配（所有项目共用）
             </p>
           </div>
         </div>
@@ -411,21 +409,23 @@ export default function ProviderConfig() {
                 />
               </div>
 
-              {/* Base URL (OpenAI only) */}
-              {form.provider_type === "openai_compatible" && (
-                <div>
-                  <label className="mb-1.5 block text-sm text-text-secondary">
-                    自定义 Base URL
-                  </label>
-                  <input
-                    type="url"
-                    value={form.base_url}
-                    onChange={(e) => updateForm("base_url", e.target.value)}
-                    className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary transition-colors focus:border-border-active"
-                    placeholder="https://api.example.com/v1"
-                  />
-                </div>
-              )}
+              {/* Base URL (optional, all provider types) */}
+              <div>
+                <label className="mb-1.5 block text-sm text-text-secondary">
+                  自定义 Base URL（可选）
+                </label>
+                <input
+                  type="url"
+                  value={form.base_url}
+                  onChange={(e) => updateForm("base_url", e.target.value)}
+                  className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary transition-colors focus:border-border-active"
+                  placeholder={
+                    form.provider_type === "anthropic"
+                      ? "留空使用官方端点，或填代理地址"
+                      : "https://api.example.com/v1"
+                  }
+                />
+              </div>
 
               {/* API Key */}
               <div>
