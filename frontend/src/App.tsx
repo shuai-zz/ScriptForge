@@ -1,5 +1,6 @@
 import { Routes, Route } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 import ChaptersPage from "./pages/Chapters";
 import CharactersPage from "./pages/Characters";
 import Dashboard from "./pages/Dashboard";
@@ -13,8 +14,9 @@ import VersionHistory from "./pages/VersionHistory";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<AppLayout />}>
+    <ErrorBoundary>
+      <Routes>
+        <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
         <Route path="/projects/:projectId" element={<ChaptersPage />} />
         <Route path="/projects/:projectId/settings" element={<ProjectSettings />} />
@@ -26,6 +28,7 @@ export default function App() {
         <Route path="/projects/:projectId/story-bible" element={<StoryBiblePage />} />
         <Route path="/projects/:projectId/stats" element={<ScriptStats />} />
       </Route>
-    </Routes>
+      </Routes>
+    </ErrorBoundary>
   );
 }

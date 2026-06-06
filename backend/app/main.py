@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
+from app.core.exceptions import register_exception_handlers
 from app.routers import annotations, chapters, characters, conversion, export, projects, providers, story_bibles, versions
 
 app = FastAPI(
@@ -30,6 +31,8 @@ app.include_router(versions.router)
 app.include_router(export.router)
 app.include_router(conversion.router)
 app.include_router(story_bibles.router)
+
+register_exception_handlers(app)
 
 
 @app.get("/api/health")
