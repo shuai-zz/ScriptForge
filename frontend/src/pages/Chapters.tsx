@@ -31,6 +31,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { useToast } from "../components/ToastContainer";
+import { EmptyState } from "@/components/EmptyState";
 
 interface Chapter {
   id: string;
@@ -390,31 +391,30 @@ export default function ChaptersPage() {
       {loading ? (
         <PageLoader />
       ) : chapters.length === 0 ? (
-        /* Empty state */
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-surface py-20">
-          <Hash className="h-12 w-12 text-text-muted" />
-          <p className="text-text-secondary">还没有章节</p>
-          <p className="max-w-sm text-center text-sm text-text-muted">
-            至少需要 3 章才能启动 AI 转换。可以粘贴文本、上传 .txt/.md 文件。
-          </p>
-          <div className="flex gap-3">
-            <button
-              onClick={openCreate}
-              className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-primary-hover"
-            >
-              粘贴文本
-            </button>
-            <label className="cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm text-text-primary transition-colors hover:border-primary/30">
-              上传文件
-              <input
-                type="file"
-                accept=".txt,.md,text/plain,text/markdown"
-                className="hidden"
-                onChange={handleFileUpload}
-              />
-            </label>
-          </div>
-        </div>
+        <EmptyState
+          icon={<Hash className="h-12 w-12" />}
+          title="还没有章节"
+          description="至少需要 3 章才能启动 AI 转换。可以粘贴文本、上传 .txt/.md 文件。"
+          action={
+            <div className="flex gap-3">
+              <button
+                onClick={openCreate}
+                className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500"
+              >
+                粘贴文本
+              </button>
+              <label className="cursor-pointer rounded-lg border border-neutral-700 bg-neutral-800 px-4 py-2 text-sm text-neutral-200 transition-colors hover:border-amber-600/50">
+                上传文件
+                <input
+                  type="file"
+                  accept=".txt,.md,text/plain,text/markdown"
+                  className="hidden"
+                  onChange={handleFileUpload}
+                />
+              </label>
+            </div>
+          }
+        />
       ) : (
         <DndContext
           sensors={sensors}

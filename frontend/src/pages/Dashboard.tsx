@@ -10,6 +10,7 @@ import {
   X,
 } from "lucide-react";
 import { useToast } from "../components/ToastContainer";
+import { EmptyState } from "@/components/EmptyState";
 
 interface ProjectCard {
   id: string;
@@ -173,17 +174,19 @@ export default function Dashboard() {
           </button>
         </div>
       ) : projects.length === 0 ? (
-        /* Empty state */
-        <div className="flex flex-col items-center justify-center gap-4 rounded-xl border border-dashed border-border bg-surface py-20">
-          <Clapperboard className="h-12 w-12 text-text-muted" />
-          <p className="text-text-secondary">还没有项目</p>
-          <button
-            onClick={() => setCreateOpen(true)}
-            className="rounded-lg border border-border bg-card px-4 py-2 text-sm text-text-primary transition-colors hover:border-primary/30"
-          >
-            创建第一个项目
-          </button>
-        </div>
+        <EmptyState
+          icon={<Clapperboard className="h-12 w-12" />}
+          title="还没有项目"
+          description="创建一个新项目，开始将小说转换为剧本。"
+          action={
+            <button
+              onClick={() => setCreateOpen(true)}
+              className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-amber-500"
+            >
+              创建第一个项目
+            </button>
+          }
+        />
       ) : (
         /* Project Grid */
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
