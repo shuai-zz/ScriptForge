@@ -1,0 +1,160 @@
+# ScriptForge Story Bible Schema v1.0
+# AI's global analysis output for a novel — the "shared context" fed to
+# every Stage 1 chapter conversion. Design rationale: compressing the full
+# novel into a structured bible (~3K words) keeps per-chapter context within
+# LLM limits while preserving narrative coherence.
+
+schema_version: "1.0"
+schema_name: "scriptforge-story-bible"
+
+overall_synopsis: |
+  三年前，刑警林默的搭档在一次行动中身亡，林默负伤退役。
+  如今，一宗连环杀人案的作案手法与当年案件惊人相似，
+  林默被迫重回现场。随着调查深入，他发现凶手竟与自己有着
+  无法割裂的深层联系，而所有线索都指向一个被埋藏的真相。
+
+# Per-chapter synopses with key events, character introductions,
+# foreshadowing setups and payoffs.
+chapter_synopses:
+  - chapter_number: 1
+    summary: "林默退役后的日常被打破，收到匿名威胁，旧案重启。"
+    key_events:
+      - description: "林默从噩梦中惊醒"
+        significance: "setup"                  # enum: major | minor | setup | payoff
+      - description: "收到匿名威胁短信"
+        significance: "major"
+      - description: "上级电话要求他协助调查"
+        significance: "major"
+    new_characters: ["char-001"]
+    new_locations: ["林默公寓"]
+    foreshadowing_setups:
+      - "短信发送者的语气暗示与林默有私人恩怨"
+      - "床头柜上的药瓶暗示林默有心理创伤"
+    foreshadowing_payoffs: []
+
+  - chapter_number: 2
+    summary: "林默回到警局，与苏晚初次对峙，两人互相试探。"
+    key_events:
+      - description: "林默与苏晚在案发现场对峙"
+        significance: "major"
+      - description: "苏晚暗示她知道林默的过去"
+        significance: "setup"
+    new_characters: ["char-002"]
+    new_locations: ["警局", "第一案发现场"]
+    foreshadowing_setups:
+      - "苏晚知道林默搭档死亡的细节"
+    foreshadowing_payoffs:
+      - "短信发送者的语气暗示与林默有私人恩怨"  # payoff from ch.1
+
+# Character network graph data (nodes + edges).
+character_network:
+  nodes:
+    - character_id: "char-001"
+      name: "林默"
+      role_type: "protagonist"
+    - character_id: "char-002"
+      name: "苏晚"
+      role_type: "antagonist"
+    - character_id: "char-003"
+      name: "小雨"
+      role_type: "supporting"
+  edges:
+    - source: "char-001"
+      target: "char-002"
+      type: "rival"
+      intensity: 4
+      key_moments:
+        - "第三章：林默发现苏晚的真实身份"
+        - "第七章：两人被迫合作"
+    - source: "char-001"
+      target: "char-003"
+      type: "family"
+      intensity: 5
+      key_moments:
+        - "第一章：回忆中提及"
+        - "终章：和解场景"
+
+# Chronological event timeline with flashback markers.
+timeline:
+  - event_id: "evt-001"
+    time_label: "flashback"                    # enum: now | flashback | flashforward
+    description: "三年前行动，搭档身亡"
+    duration: "约30分钟"
+    time_of_day: "night"                       # enum: dawn | morning | afternoon | dusk | evening | night | midnight
+    trigger_events: []                         # [event_id], what triggers this flashback
+    chapter: 1
+
+  - event_id: "evt-002"
+    time_label: "now"
+    description: "林默收到威胁短信"
+    duration: "5分钟"
+    time_of_day: "night"
+    trigger_events: ["evt-001"]                # nightmare triggers the memory
+    chapter: 1
+
+  - event_id: "evt-003"
+    time_label: "now"
+    description: "林默与苏晚首次对峙"
+    duration: "15分钟"
+    time_of_day: "morning"
+    trigger_events: []
+    chapter: 2
+
+# Core themes with textual evidence and suggested visual motifs.
+themes:
+  - theme_id: "theme-001"
+    name: "罪与救赎"
+    description: "角色因过去的错误而自我惩罚，最终通过面对真相获得解脱"
+    textual_instances:
+      - "林默的药瓶"
+      - "他拒绝女儿的电话"
+      - "终章：林默选择不扣动扳机"
+    visual_motifs:
+      - "镜子/倒影（自我审视）"
+      - "雨（清洗与重生）"
+      - "逐渐打开的门（心门开启）"
+
+  - theme_id: "theme-002"
+    name: "真相的双刃剑"
+    description: "知道真相的代价与不知道真相的代价同样沉重"
+    textual_instances:
+      - "苏晚知道真相后崩溃"
+      - "林默宁愿不知道凶手的身份"
+    visual_motifs:
+      - "破碎的镜子"
+      - "迷宫般的走廊"
+
+# Foreshadowing tracker: setups and their eventual payoffs.
+foreshadowing_tracking:
+  - item_id: "fore-001"
+    setup_chapter: 1
+    description: "林默眼角的伤疤"
+    status: "resolved"                         # enum: unresolved | resolved
+    payoff_chapter: 8
+
+  - item_id: "fore-002"
+    setup_chapter: 1
+    description: "匿名威胁短信的发送者身份"
+    status: "resolved"
+    payoff_chapter: 6
+
+  - item_id: "fore-003"
+    setup_chapter: 2
+    description: "苏晚对林默过去的了解程度"
+    status: "unresolved"
+
+# Location index with descriptions, key props, and associated scenes.
+location_index:
+  - location_id: "loc-001"
+    name: "林默公寓"
+    description: "老旧的一居室，凌乱但有序。墙上挂着退役前的合照。"
+    key_props: ["药瓶", "合照", "旧警徽", "手机"]
+    first_chapter: 1
+    scenes: ["scene-001", "scene-005", "scene-012"]
+
+  - location_id: "loc-002"
+    name: "第一案发现场"
+    description: "废弃工厂，阴暗潮湿。墙上留有凶手的标记。"
+    key_props: ["标记", "血迹", "旧报纸"]
+    first_chapter: 2
+    scenes: ["scene-003", "scene-007"]

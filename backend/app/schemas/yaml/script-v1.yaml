@@ -1,0 +1,102 @@
+# ScriptForge Script Schema v1.0
+# Complete screenplay representation for novel-to-script adaptation.
+# Design rationale: YAML is human-readable, git-diff friendly, and structurally
+# richer than Fountain/FDX for programmatic processing.
+
+schema_version: "1.0"
+schema_name: "scriptforge-script"
+
+metadata:
+  title: "长夜将明"                          # string, required
+  subtitle: "第一幕"                         # string, optional
+  source_novel: "长夜将明"                   # string, optional
+  source_author: "张三"                      # string, optional
+  schema_version: "1.0"                      # string, default "1.0"
+  created_at: "2026-06-05T10:00:00Z"         # ISO-8601 datetime
+  updated_at: "2026-06-05T12:30:00Z"         # ISO-8601 datetime
+  total_scenes: 18                           # integer >= 0
+  estimated_runtime: 120                     # integer, minutes >= 0
+
+# Character roster referenced by scenes.
+# Full profiles live in character-v1.yaml; this is a denormalized snapshot.
+characters:
+  - character_id: "char-001"
+    name: "林默"
+    aliases: ["小林", "林警官"]
+    role_type: "protagonist"                # enum: protagonist | antagonist | supporting | minor
+    age: 32
+    gender: "男"
+    archetype: "悲剧英雄"
+    traits: ["沉默寡言", "正义感强", "有创伤"]
+    arc_summary: "从自我封闭到主动面对过去"
+
+  - character_id: "char-002"
+    name: "苏晚"
+    aliases: []
+    role_type: "antagonist"
+    age: 28
+    gender: "女"
+    archetype: "魅影操纵者"
+    traits: ["聪明", "冷酷", "复仇心重"]
+    arc_summary: "复仇者发现真相后自我瓦解"
+
+# Scenes are the core narrative units. Each scene has a slug line,
+# a summary, and alternating action / dialogue blocks.
+scenes:
+  - scene_id: "scene-001"
+    scene_number: 1                           # integer >= 1, sequential
+    slug:
+      location_type: "INT."                   # enum: INT. | EXT. | INT./EXT.
+      location_name: "林默公寓 - 卧室"
+      time: "NIGHT"                           # enum: DAY | NIGHT | DAWN | DUSK | MORNING
+                                                #       | AFTERNOON | EVENING | LATER | CONTINUOUS | SAME TIME
+    summary: "林默被噩梦惊醒，发现手机上有匿名威胁短信。"
+    characters_present: ["char-001"]
+    props: ["手机", "警徽", "床头柜上的药瓶"]
+    blocks:
+      - block_id: "blk-001"
+        order: 0
+        type: "action"
+        text: |
+          黑暗中，林默猛地坐起。冷汗浸透睡衣。
+          床头柜上的手机屏幕亮起——一条陌生号码发来的短信：
+          "你逃不掉的。"
+        annotation_refs: ["ann-001"]
+        source_ref:
+          chapter: 1
+          paragraph: 3
+          quote: "林默从噩梦中惊醒，发现手机上有一条陌生短信。"
+
+      - block_id: "blk-002"
+        order: 1
+        type: "dialogue"
+        char_id: "char-001"
+        char_name: "林默"
+        line: "又是这个号码……"
+        parenthetical: "（低声，手指颤抖）"
+        annotation_refs: []
+        source_ref:
+          chapter: 1
+          paragraph: 5
+          quote: "又是这个号码，林默低声说道。"
+
+    # Annotations attached to this specific scene.
+    annotations: []
+
+# Flat scene index for quick navigation / timeline rendering.
+scene_index:
+  - scene_id: "scene-001"
+    scene_number: 1
+    slug_line: "INT. 林默公寓 - 卧室 - NIGHT"
+    summary: "林默被噩梦惊醒，收到威胁短信。"
+    characters: ["char-001"]
+    page_estimate: 1.5                        # float, estimated screenplay pages
+
+# Global annotations apply to the script as a whole (structural, pacing, etc.).
+global_annotations:
+  - annotation_id: "ann-global-001"
+    severity: "warning"
+    category: "pacing_suggestion"
+    title: "前两场景节奏偏慢"
+    description: "前两个场景以内敛氛围营造为主，但连续两个室内夜戏可能让观众感到压抑，建议第三场景切至外景日光以释放张力。"
+    confidence: 0.78

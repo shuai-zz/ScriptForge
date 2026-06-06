@@ -1,13 +1,34 @@
 import { Routes, Route } from "react-router-dom";
 import AppLayout from "./components/AppLayout";
+import { ErrorBoundary } from "./components/ErrorBoundary";
+import ChaptersPage from "./pages/Chapters";
+import CharactersPage from "./pages/Characters";
 import Dashboard from "./pages/Dashboard";
+import PipelineProgress from "./pages/PipelineProgress";
+import ProjectSettings from "./pages/ProjectSettings";
+import ProviderConfig from "./pages/ProviderConfig";
+import ScriptEditor from "./pages/ScriptEditor";
+import ScriptStats from "./pages/ScriptStats";
+import StoryBiblePage from "./pages/StoryBible";
+import VersionHistory from "./pages/VersionHistory";
 
 export default function App() {
   return (
-    <Routes>
-      <Route element={<AppLayout />}>
+    <ErrorBoundary>
+      <Routes>
+        <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/projects/:projectId" element={<ChaptersPage />} />
+        <Route path="/projects/:projectId/settings" element={<ProjectSettings />} />
+        <Route path="/projects/:projectId/providers" element={<ProviderConfig />} />
+        <Route path="/projects/:projectId/convert" element={<PipelineProgress />} />
+        <Route path="/projects/:projectId/script" element={<ScriptEditor />} />
+        <Route path="/projects/:projectId/versions" element={<VersionHistory />} />
+        <Route path="/projects/:projectId/characters" element={<CharactersPage />} />
+        <Route path="/projects/:projectId/story-bible" element={<StoryBiblePage />} />
+        <Route path="/projects/:projectId/stats" element={<ScriptStats />} />
       </Route>
-    </Routes>
+      </Routes>
+    </ErrorBoundary>
   );
 }
