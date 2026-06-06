@@ -134,11 +134,18 @@ async def create_relationship(
     db: AsyncSession = Depends(get_db),
 ) -> dict:
     """Create a relationship between two characters."""
+    source_id = data.get("source_character_id")
+    target_id = data.get("target_character_id")
+    if not source_id or not target_id:
+        raise HTTPException(
+            status_code=422,
+            detail="source_character_id 和 target_character_id 不能为空",
+        )
     rel = await CharacterRelationshipService.create(
         db,
         project_id=project_id,
-        source_character_id=uuid.UUID(data["source_character_id"]),
-        target_character_id=uuid.UUID(data["target_character_id"]),
+        source_character_id=uuid.UUID(source_id),
+        target_character_id=uuid.UUID(target_id),
         type=data["type"],
         intensity=data.get("intensity", 3),
     )

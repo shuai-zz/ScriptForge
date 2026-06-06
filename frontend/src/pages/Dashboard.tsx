@@ -9,7 +9,7 @@ import {
   Users,
   X,
 } from "lucide-react";
-import { useToast } from "../components/ToastContainer";
+import { toast } from "../components/ToastContext";
 import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -42,7 +42,6 @@ const FORMAT_LABELS: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [loading, setLoading] = useState(true);

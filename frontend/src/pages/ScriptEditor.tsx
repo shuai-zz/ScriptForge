@@ -7,7 +7,7 @@ import SceneContainer from "@/components/script-editor/SceneContainer";
 import CommandPalette from "@/components/script-editor/CommandPalette";
 import AnnotationSidebar from "@/components/script-editor/AnnotationSidebar";
 import ExportDialog from "@/components/script-editor/ExportDialog";
-import { useToast } from "@/components/ToastContainer";
+import { toast } from "@/components/ToastContext";
 import { cn } from "@/lib/utils";
 import { Keyboard, Maximize2, Minimize2, Download, X, Loader2, GitCommit } from "lucide-react";
 
@@ -225,7 +225,6 @@ function makeDemoAnnotations() {
 
 export default function ScriptEditor() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { toast } = useToast();
 
   const [script, setScript] = useState<ScriptV1>(makeDemoScript);
   const [annotations, setAnnotations] = useState<any[]>(makeDemoAnnotations);
