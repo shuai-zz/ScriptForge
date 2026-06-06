@@ -1,9 +1,15 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Dashboard", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.context().addInitScript(() => {
+      localStorage.setItem("scriptforge_onboarding_completed", "true");
+    });
+  });
+
   test("page loads with title", async ({ page }) => {
     await page.goto("/");
-    await expect(page.locator("text=ScriptForge")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "ScriptForge" })).toBeVisible();
   });
 
   test("can create a project", async ({ page }) => {
@@ -13,14 +19,14 @@ test.describe("Dashboard", () => {
     await page.click("text=新建项目");
 
     // Fill form
-    await page.fill('input[placeholder="项目名称"]', "E2E 测试项目");
-    await page.fill('textarea', "这是一个 E2E 测试项目");
+    await page.fill('input[placeholder="例如：长夜将明"]', "E2E 测试项目");
+    await page.fill('textarea[placeholder="可选的项目描述"]', "这是一个 E2E 测试项目");
 
     // Submit
-    await page.click("text=创建");
+    await page.click("button:has-text('创建'):not(:has-text('第一个'))");
 
-    // Should see the project card
-    await expect(page.locator("text=E2E 测试项目")).toBeVisible();
+    // Dashboard navigates directly to the new project
+    await expect(page).toHaveURL(/\/projects\/[\w-]+/);
   });
 
   test("project card navigates to project page", async ({ page }) => {

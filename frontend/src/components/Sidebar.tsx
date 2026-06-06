@@ -2,6 +2,7 @@ import type { FC } from "react";
 import { NavLink, useParams } from "react-router-dom";
 import {
   BookOpen,
+  Bot,
   Clapperboard,
   FileText,
   Home,
@@ -51,6 +52,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
           <SidebarLink to={`/projects/${projectId}/story-bible`} icon={FileText} label="圣经" onClick={onClose} />
           <SidebarLink to={`/projects/${projectId}/stats`} icon={LayoutDashboard} label="统计" onClick={onClose} />
           <SidebarLink to={`/projects/${projectId}/versions`} icon={Settings} label="版本" onClick={onClose} />
+          <SidebarLink to={`/projects/${projectId}/providers`} icon={Bot} label="模型" onClick={onClose} />
         </nav>
       )}
 
