@@ -1,11 +1,13 @@
 import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
 import Sidebar from "./Sidebar";
 import ToastContainer from "./ToastContainer";
 
 export default function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -48,7 +50,17 @@ export default function AppLayout() {
         </header>
 
         <main className="flex-1 overflow-y-auto bg-neutral-950">
-          <Outlet />
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+            >
+              <Outlet />
+            </motion.div>
+          </AnimatePresence>
         </main>
       </div>
 

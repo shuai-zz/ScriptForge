@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useToast } from "../components/ToastContainer";
 import { EmptyState } from "@/components/EmptyState";
+import { motion } from "framer-motion";
 
 interface ProjectCard {
   id: string;
@@ -193,10 +194,13 @@ export default function Dashboard() {
           {projects.map((p) => {
             const progress = getProgress(p);
             return (
-              <div
+              <motion.div
                 key={p.id}
                 onClick={() => navigate(`/projects/${p.id}`)}
-                className="group relative cursor-pointer overflow-hidden rounded-xl border border-border bg-surface p-6 shadow-card transition-all hover:border-primary/20 hover:shadow-card-hover"
+                whileHover={{ y: -4, scale: 1.01 }}
+                whileTap={{ scale: 0.98 }}
+                transition={{ type: "spring", stiffness: 300, damping: 20 }}
+                className="group relative cursor-pointer overflow-hidden rounded-xl border border-neutral-800 bg-neutral-900 p-6 shadow-md transition-colors hover:border-amber-600/30 hover:shadow-lg"
               >
                 {/* Top glow line */}
                 <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent" />
@@ -266,7 +270,7 @@ export default function Dashboard() {
                     {STATUS_LABELS[p.status] || p.status}
                   </span>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
