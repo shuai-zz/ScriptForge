@@ -1,7 +1,6 @@
 """Project CRUD service."""
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -53,7 +52,6 @@ class ProjectService:
             if hasattr(project, key):
                 setattr(project, key, value)
 
-        project.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(project)
         return project

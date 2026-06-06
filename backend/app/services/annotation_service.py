@@ -1,7 +1,6 @@
 """Annotation CRUD service."""
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -101,7 +100,6 @@ class AnnotationService:
         if data.confidence is not None:
             annotation.confidence = data.confidence
 
-        annotation.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(annotation)
         return annotation
@@ -125,7 +123,6 @@ class AnnotationService:
         if not annotation:
             return None
         annotation.status = status
-        annotation.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(annotation)
         return annotation
