@@ -2,7 +2,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Download, FileText, FileCode, FileType, FileArchive, X, Check, Loader2 } from "lucide-react";
 
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = "/api";
 
 interface ExportFormat {
   key: string;
