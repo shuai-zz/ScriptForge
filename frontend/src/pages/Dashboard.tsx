@@ -12,6 +12,7 @@ import {
 import { useToast } from "../components/ToastContainer";
 import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
+import { OnboardingWizard } from "@/components/OnboardingWizard";
 
 interface ProjectCard {
   id: string;
@@ -404,6 +405,7 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      <OnboardingWizard />
     </div>
   );
 }
