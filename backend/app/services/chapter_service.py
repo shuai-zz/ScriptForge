@@ -1,7 +1,6 @@
 """Chapter CRUD service."""
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,7 +71,6 @@ class ChapterService:
             if hasattr(chapter, key):
                 setattr(chapter, key, value)
 
-        chapter.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(chapter)
         return chapter
@@ -95,5 +93,4 @@ class ChapterService:
             ch = await ChapterService.get(db, cid)
             if ch and ch.project_id == project_id and ch.number != idx:
                 ch.number = idx
-                ch.updated_at = datetime.now(timezone.utc)
         await db.commit()

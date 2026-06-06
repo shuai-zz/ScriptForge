@@ -1,7 +1,6 @@
 """Character and CharacterRelationship CRUD service."""
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -65,7 +64,6 @@ class CharacterService:
             if hasattr(char, key):
                 setattr(char, key, value)
 
-        char.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(char)
         return char
