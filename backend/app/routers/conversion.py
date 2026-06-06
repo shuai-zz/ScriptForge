@@ -358,10 +358,12 @@ async def _load_project_providers(
     )
     chapters = result.scalars().all()
 
-    result = await db.execute(
-        select(LLMProvider).where(LLMProvider.project_id == project_id)
-    )
+    result = await db.execute(select(LLMProvider))
     providers_orm = result.scalars().all()
+    if not providers_orm:
+        raise HTTPException(
+            status_code=400, detail="请先在首页配置 AI 模型"
+        )
 
     providers: dict[str, dict] = {}
     for p in providers_orm:

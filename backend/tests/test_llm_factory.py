@@ -37,6 +37,29 @@ class TestCreateChatModelAnthropic:
 
     @patch("app.services.llm_factory.ChatAnthropic")
     @patch("app.services.llm_factory.decrypt")
+    def test_with_base_url(self, mock_decrypt, mock_chat_anthropic):
+        mock_decrypt.return_value = "sk-ant-test-key"
+        mock_chat_anthropic.return_value = MagicMock()
+
+        provider = MagicMock()
+        provider.provider_type = "anthropic"
+        provider.provider_id = "prov-claude-proxy"
+        provider.model_name = "claude-sonnet-4-6"
+        provider.encrypted_api_key = "enc"
+        provider.parameters = {"temperature": 0.7}
+        provider.base_url = "https://anthropic.proxy.internal"
+
+        create_chat_model(provider)
+
+        mock_chat_anthropic.assert_called_once_with(
+            model="claude-sonnet-4-6",
+            api_key="sk-ant-test-key",
+            temperature=0.7,
+            base_url="https://anthropic.proxy.internal",
+        )
+
+    @patch("app.services.llm_factory.ChatAnthropic")
+    @patch("app.services.llm_factory.decrypt")
     def test_with_max_tokens(self, mock_decrypt, mock_chat_anthropic):
         mock_decrypt.return_value = "sk-ant-api03-test-key"
         mock_chat_anthropic.return_value = MagicMock()

@@ -40,6 +40,8 @@ def _build_kwargs(
             "api_key": api_key,
             "temperature": temperature,
         }
+        if base_url:
+            kwargs["base_url"] = base_url
         if max_tokens is not None:
             kwargs["max_tokens"] = max_tokens
         if params.get("thinking"):

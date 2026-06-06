@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, Text, func
+from sqlalchemy import ForeignKey, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -34,14 +34,14 @@ class ConversionRun(Base):
 
 
 class LLMProvider(Base):
-    """Configured LLM provider for a project."""
+    """A globally-configured LLM provider, shared across all projects."""
 
     __tablename__ = "llm_providers"
+    __table_args__ = (
+        UniqueConstraint("provider_id", name="uq_llm_providers_provider_id"),
+    )
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
-    project_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("projects.id", ondelete="CASCADE"),
-    )
     provider_id: Mapped[str] = mapped_column(String(100))
     label: Mapped[str] = mapped_column(String(255))
     provider_type: Mapped[str] = mapped_column(String(50))
