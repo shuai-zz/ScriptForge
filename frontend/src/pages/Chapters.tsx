@@ -30,7 +30,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import { useToast } from "../components/ToastContainer";
+import { toast } from "../components/ToastContext";
 import { EmptyState } from "@/components/EmptyState";
 
 interface Chapter {
@@ -145,7 +145,6 @@ function SortableChapterRow({
 export default function ChaptersPage() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [loading, setLoading] = useState(true);

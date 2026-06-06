@@ -12,7 +12,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useToast } from "../components/ToastContainer";
+import { toast } from "../components/ToastContext";
 
 type ProviderType = "anthropic" | "openai_compatible";
 
@@ -72,7 +72,6 @@ const DEFAULT_FORM: FormData = {
 export default function ProviderConfig() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [providers, setProviders] = useState<Provider[]>([]);
   const [loading, setLoading] = useState(true);
