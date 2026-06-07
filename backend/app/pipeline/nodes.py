@@ -478,6 +478,19 @@ def _coerce_slug(value) -> dict:
     return {"location_type": "INT.", "location_name": "未知地点", "time": "DAY"}
 
 
+def _first_int(value, default: int = 1) -> int:
+    """Extract the first integer from a value ('4-7' -> 4); else the default."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        m = re.search(r"\d+", value)
+        if m:
+            return int(m.group())
+    return default
+
+
 def _normalize_scene(scene: dict, chapter_number, index: int) -> dict:
     """Best-effort coercion of an LLM scene into the Scene schema shape.
 
@@ -504,6 +517,16 @@ def _normalize_scene(scene: dict, chapter_number, index: int) -> dict:
                 )
             if "annotation_refs" in block:
                 block["annotation_refs"] = _stringify_list(block["annotation_refs"])
+            # source_ref.chapter/paragraph are ints, but the model often writes a
+            # range like "4-7" or a "第N章" string — coerce to the first integer.
+            ref = block.get("source_ref")
+            if isinstance(ref, dict):
+                ref["chapter"] = _first_int(ref.get("chapter"), chapter_number or 1)
+                ref["paragraph"] = _first_int(ref.get("paragraph"), 1)
+                if not isinstance(ref.get("quote"), str):
+                    ref["quote"] = str(ref.get("quote") or "")
+            elif ref is not None:
+                block["source_ref"] = None  # malformed → drop (field is optional)
     # scene.annotations is list[SceneAnnotationRef] ({annotation_id}); the model
     # often drops a bare description string here — wrap it into a ref object.
     anns = scene.get("annotations")
@@ -688,6 +711,21 @@ def stage_2_assemble(state: ConversionState) -> dict:
             }
         )
 
+    # Carry characters over from the Story Bible's network so the script is
+    # self-contained (powers the editor's character refs and the stats page).
+    char_nodes = (story_bible.get("character_network") or {}).get("nodes") or []
+    characters = [
+        {
+            "character_id": n.get("character_id", ""),
+            "name": n.get("name", ""),
+            "role_type": n.get("role_type", "supporting"),
+            "aliases": [],
+            "traits": [],
+        }
+        for n in char_nodes
+        if isinstance(n, dict) and n.get("character_id") and n.get("name")
+    ]
+
     # Build ScriptV1
     try:
         script = ScriptV1(
@@ -695,6 +733,7 @@ def stage_2_assemble(state: ConversionState) -> dict:
                 title=project_title,
                 total_scenes=len(all_scenes),
             ),
+            characters=characters,
             scenes=all_scenes,
             scene_index=scene_index,
         )
