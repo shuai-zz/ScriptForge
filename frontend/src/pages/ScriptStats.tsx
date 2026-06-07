@@ -27,8 +27,7 @@ export default function ScriptStats() {
   const fetchScript = useCallback(async () => {
     setLoading(true);
     try {
-      // Try to load script from export endpoint
-      const res = await fetch(`/api/projects/${projectId}/export/yaml`);
+      const res = await fetch(`/api/projects/${projectId}/script`);
       if (!res.ok) {
         if (res.status === 404) {
           setScript(null);
@@ -36,11 +35,7 @@ export default function ScriptStats() {
         }
         throw new Error("加载失败");
       }
-      const _yamlText = await res.text();
-      // Simple YAML-like parsing for stats (in real app use js-yaml)
-      // Fallback: use demo-like empty state
-      void _yamlText;
-      setScript(null);
+      setScript(await res.json());
     } catch {
       toast("error", "加载剧本数据失败");
     } finally {

@@ -16,9 +16,14 @@ from app.models.chapter import Chapter
 from app.models.conversion import ConversionRun, LLMProvider
 from app.models.project import Project
 from app.models.script import Script
+from app.models.story_bible import StoryBible
 from app.pipeline.graph import build_conversion_graph
 from app.pipeline.state import ConversionState
 from app.schemas.script import ScriptV1
+from app.services.character_service import (
+    CharacterRelationshipService,
+    CharacterService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -158,6 +163,7 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
         # Persist the assembled script once the run has completed
         if final_status == "completed":
             await _persist_script(project_id, graph, config)
+            await _persist_bible_and_characters(project_id, graph, config)
 
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
@@ -345,6 +351,7 @@ async def resume_conversion(
         # Persist the assembled script once the run has completed
         if final_status == "completed":
             await _persist_script(project_id, graph, config)
+            await _persist_bible_and_characters(project_id, graph, config)
 
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
@@ -458,3 +465,80 @@ async def _persist_script(
             await db.commit()
     except Exception:
         logger.exception("Failed to persist script for project %s", project_id)
+
+
+async def _persist_bible_and_characters(
+    project_id: uuid.UUID, graph, config: RunnableConfig
+) -> None:
+    """Persist the Story Bible and its characters/relationships after a run.
+
+    Upserts the bible into ``story_bibles`` and creates Character /
+    CharacterRelationship rows from the bible's ``character_network`` (skipping
+    any that already exist by name, so user-added characters are preserved).
+    Best-effort: any failure is logged, never propagated.
+    """
+    try:
+        snapshot = await graph.aget_state(config)
+        bible = (snapshot.values or {}).get("story_bible")
+        if not bible:
+            return
+
+        async with async_session_factory() as db:
+            # 1) Upsert the Story Bible content.
+            result = await db.execute(
+                select(StoryBible).where(StoryBible.project_id == project_id)
+            )
+            row = result.scalar_one_or_none()
+            if row:
+                row.content = bible
+            else:
+                db.add(StoryBible(project_id=project_id, content=bible))
+            await db.commit()
+
+            # 2) Characters from character_network.nodes (dedupe by name).
+            network = bible.get("character_network") or {}
+            existing = await CharacterService.list_by_project(db, project_id)
+            by_name = {c.name: c for c in existing}
+            id_map: dict[str, object] = {}
+            for node in network.get("nodes") or []:
+                name = node.get("name")
+                if not name:
+                    continue
+                char = by_name.get(name)
+                if char is None:
+                    char = await CharacterService.create(
+                        db,
+                        project_id=project_id,
+                        name=name,
+                        role_type=node.get("role_type", "supporting"),
+                        aliases=[],
+                        traits=[],
+                    )
+                    by_name[name] = char
+                if node.get("character_id"):
+                    id_map[node["character_id"]] = char
+
+            # 3) Relationships from character_network.edges (skip duplicates).
+            existing_rels = await CharacterRelationshipService.list_by_project(
+                db, project_id
+            )
+            seen = {(r.source_character_id, r.target_character_id) for r in existing_rels}
+            for edge in network.get("edges") or []:
+                src = id_map.get(edge.get("source"))
+                tgt = id_map.get(edge.get("target"))
+                if not src or not tgt or (src.id, tgt.id) in seen:
+                    continue
+                intensity = max(1, min(5, int(edge.get("intensity", 3) or 3)))
+                await CharacterRelationshipService.create(
+                    db,
+                    project_id=project_id,
+                    source_character_id=src.id,
+                    target_character_id=tgt.id,
+                    type=str(edge.get("type", "other")),
+                    intensity=intensity,
+                )
+                seen.add((src.id, tgt.id))
+    except Exception:
+        logger.exception(
+            "Failed to persist story bible / characters for project %s", project_id
+        )

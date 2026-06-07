@@ -688,6 +688,21 @@ def stage_2_assemble(state: ConversionState) -> dict:
             }
         )
 
+    # Carry characters over from the Story Bible's network so the script is
+    # self-contained (powers the editor's character refs and the stats page).
+    char_nodes = (story_bible.get("character_network") or {}).get("nodes") or []
+    characters = [
+        {
+            "character_id": n.get("character_id", ""),
+            "name": n.get("name", ""),
+            "role_type": n.get("role_type", "supporting"),
+            "aliases": [],
+            "traits": [],
+        }
+        for n in char_nodes
+        if isinstance(n, dict) and n.get("character_id") and n.get("name")
+    ]
+
     # Build ScriptV1
     try:
         script = ScriptV1(
@@ -695,6 +710,7 @@ def stage_2_assemble(state: ConversionState) -> dict:
                 title=project_title,
                 total_scenes=len(all_scenes),
             ),
+            characters=characters,
             scenes=all_scenes,
             scene_index=scene_index,
         )
