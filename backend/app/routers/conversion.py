@@ -110,6 +110,9 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
         try:
             async for event in graph.astream(state, config=config):
                 for node_name, node_output in event.items():
+                    # LangGraph yields None for nodes that produce no state
+                    # update (e.g. the stage_1_splitter no-op) — guard against it.
+                    node_output = node_output or {}
                     progress = node_output.get("progress", {})
                     if progress:
                         final_stage = progress.get("current_stage", final_stage)
@@ -294,6 +297,9 @@ async def resume_conversion(
             # Resume from checkpoint by passing None as input
             async for event in graph.astream(None, config=config):
                 for node_name, node_output in event.items():
+                    # LangGraph yields None for nodes that produce no state
+                    # update (e.g. the stage_1_splitter no-op) — guard against it.
+                    node_output = node_output or {}
                     progress = node_output.get("progress", {})
                     if progress:
                         final_stage = progress.get("current_stage", final_stage)

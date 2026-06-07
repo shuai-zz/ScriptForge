@@ -274,6 +274,53 @@ async def test_pydantic_validation_runs_at_stage_0(mock_llm_response, sample_cha
         )
 
 
+MALFORMED_BIBLE_JSON = """
+{
+  "metadata": {"title": "三体"},
+  "chapter_synopses": [
+    {"chapter_number": "第1章", "summary": "汪淼发现倒计时", "key_events": [{"description": "倒计时", "significance": "setup"}]}
+  ],
+  "timeline": [
+    {"sequence": 1, "event": "汪淼发现倒计时", "chapter": "第1章"},
+    {"sequence": 2, "event": "丁仪解释物理崩溃", "chapter": "第2章"},
+    {"sequence": 3, "event": "史强讲射手假说", "chapter": "第3章"}
+  ],
+  "themes": [
+    {"title": "规律与破缺", "summary": "必然与偶然的对立。"}
+  ]
+}
+"""
+
+
+@pytest.mark.asyncio
+async def test_stage_0_recovers_malformed_bible(mock_llm_response, sample_chapters):
+    """Real-world failure shape (wrong field names, '第N章', missing synopsis) is
+    repaired by normalization so stage_0 succeeds instead of erroring out."""
+    mock_chat = mock_llm_response(MALFORMED_BIBLE_JSON, CHAPTER_SCENE_JSON)
+
+    with patch(
+        "app.pipeline.nodes.create_chat_model_from_config",
+        return_value=mock_chat,
+    ):
+        state: ConversionState = {
+            "project_id": str(uuid.uuid4()),
+            "project_title": "三体",
+            "chapters": sample_chapters,
+            "provider_assignments": {"stage_0": "test-provider"},
+            "status": "running",
+        }
+        config = {"configurable": {"providers": PROVIDER_CONFIG}}
+
+        result = await stage_0_bible(state, config)
+
+    assert not result.get("errors"), result.get("errors")
+    bible = result.get("story_bible")
+    assert bible is not None
+    assert [e["chapter"] for e in bible["timeline"]] == [1, 2, 3]
+    assert bible["themes"][0]["name"] == "规律与破缺"
+    assert bible["overall_synopsis"]
+
+
 @pytest.mark.asyncio
 async def test_semantic_validators_run_at_stage_2(mock_llm_response, sample_chapters):
     """Verify that semantic validators run during stage_2_assemble."""
@@ -347,3 +394,90 @@ def test_graph_has_all_nodes():
     ]
     for node in expected:
         assert node in nodes, f"Node '{node}' not found in graph"
+
+
+@pytest.mark.asyncio
+async def test_astream_node_outputs_are_dicts(mock_llm_response, sample_chapters):
+    """Regression: a node returning {} (stage_1_splitter) makes LangGraph stream
+    None for that node, which crashed the SSE consumer with
+    "'NoneType' object has no attribute 'get'". Every streamed node output must
+    be a non-None dict so the consumer's node_output.get(...) is safe."""
+    mock_chat = mock_llm_response(STORY_BIBLE_JSON, CHAPTER_SCENE_JSON)
+    with patch(
+        "app.pipeline.nodes.create_chat_model_from_config",
+        return_value=mock_chat,
+    ):
+        state: ConversionState = {
+            "project_id": str(uuid.uuid4()),
+            "project_title": "测试项目",
+            "run_id": "test-run",
+            "chapters": sample_chapters,
+            "errors": [],
+            "chapter_scripts": {},
+            "quality_checks": {},
+            "retry_counts": {},
+            "provider_assignments": {
+                "stage_0": "test-provider",
+                "stage_1": "test-provider",
+                "stage_2": "test-provider",
+            },
+            "status": "running",
+        }
+        config = {
+            "configurable": {"thread_id": "test-run", "providers": PROVIDER_CONFIG}
+        }
+        graph = build_conversion_graph()
+
+        saw_splitter = False
+        async for event in graph.astream(state, config=config):
+            for node_name, node_output in event.items():
+                assert node_output is not None, f"node '{node_name}' streamed None"
+                assert isinstance(node_output, dict)
+                if node_name == "stage_1_splitter":
+                    saw_splitter = True
+
+        assert saw_splitter, "stage_1_splitter path was not exercised"
+
+
+@pytest.mark.asyncio
+async def test_full_pipeline_produces_script(mock_llm_response, sample_chapters):
+    """End-to-end: a passing Story Bible + chapter scenes yield an assembled
+    script. Guards the Send payload (stage_1_chapter must receive chapters /
+    providers via {**state}), scene normalization, and assembly — without the
+    Send fix stage_1 fails with "未找到" and no script is produced."""
+    mock_chat = mock_llm_response(STORY_BIBLE_JSON, CHAPTER_SCENE_JSON)
+    with patch(
+        "app.pipeline.nodes.create_chat_model_from_config",
+        return_value=mock_chat,
+    ):
+        state: ConversionState = {
+            "project_id": str(uuid.uuid4()),
+            "project_title": "测试项目",
+            "run_id": "test-run-full",
+            "chapters": sample_chapters,
+            "errors": [],
+            "chapter_scripts": {},
+            "quality_checks": {},
+            "retry_counts": {},
+            "provider_assignments": {
+                "stage_0": "test-provider",
+                "stage_1": "test-provider",
+                "stage_2": "test-provider",
+            },
+            "status": "running",
+        }
+        config = {
+            "configurable": {
+                "thread_id": "test-run-full",
+                "providers": PROVIDER_CONFIG,
+            }
+        }
+        graph = build_conversion_graph()
+
+        async for _event in graph.astream(state, config=config):
+            pass
+        snapshot = await graph.aget_state(config)
+
+    script = (snapshot.values or {}).get("assembled_script")
+    assert script is not None, "no assembled_script — stage_1 produced no scenes"
+    assert len(script.get("scenes", [])) >= 1
