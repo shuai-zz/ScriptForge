@@ -689,9 +689,14 @@ def stage_2_assemble(state: ConversionState) -> dict:
             },
         }
 
-    # Assign sequential scene numbers
+    # Assign sequential scene numbers and globally-unique IDs
+    # (LLM may emit duplicate scene_ids across chapters — dedupe here)
     for i, scene in enumerate(all_scenes, start=1):
         scene["scene_number"] = i
+        scene["scene_id"] = f"scene-{i:03d}"
+        for j, block in enumerate(scene.get("blocks", [])):
+            block["block_id"] = f"blk-{i}-{j}"
+            block["order"] = j
 
     # Build scene_index
     scene_index = []
