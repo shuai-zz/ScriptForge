@@ -41,9 +41,15 @@ def _route_stage_0(state: ConversionState) -> str:
 
 
 def _route_stage_1(state: ConversionState) -> list[Send]:
-    """Map chapters into parallel stage_1_chapter tasks."""
+    """Map chapters into parallel stage_1_chapter tasks.
+
+    Each Send payload IS the full state for that node invocation (LangGraph does
+    not merge the parent state in), so we spread the current state and override
+    chapter_number — otherwise stage_1_chapter can't see chapters / story_bible /
+    provider_assignments and every chapter fails with "未找到".
+    """
     return [
-        Send("stage_1_chapter", {"chapter_number": ch["chapter_number"]})
+        Send("stage_1_chapter", {**state, "chapter_number": ch["chapter_number"]})
         for ch in state.get("chapters", [])
     ]
 

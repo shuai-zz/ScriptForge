@@ -124,22 +124,42 @@ PromptRegistry.register(
         stage="stage_1",
         name="chapter_conversion",
         required_vars=["chapter_text", "story_bible", "previous_script"],
-        template="""你是一位专业编剧，正在将小说章节改编为标准剧本格式（YAML）。
+        template="""你是一位专业编剧，正在将小说章节改编为标准剧本格式。
 
-输入：
-1. 本章原文
-2. 故事圣经（全局上下文，含角色档案、关系网络、主题、伏笔状态）
-3. 前一章的剧本（保证连续性）
+输入：本章原文、故事圣经（全局上下文，含角色档案/关系/主题/伏笔）、前一章剧本（保证连续性）。
 
-输出要求（严格遵循 script-v1.yaml schema）：
-- 每个 scene 必须包含：scene_number, slug（INT./EXT. 地点 - 时间）, summary
-- blocks 交替排列：action（视觉动作描述）和 dialogue（角色对白）
-- dialogue 必须包含：char_id, char_name, line, parenthetical（可选）
-- 每个 block 必须有 source_ref 指向原文章节和段落
-- 如果某段内心独白被外化为动作，请添加 annotation（category: inner_to_visual, confidence）
-- scene 边界基于：地点变化、时间跳跃、叙事断裂
+**只输出 YAML**（不要额外解释），严格使用下列结构与字段名：
 
-请只输出 YAML，不要额外解释。
+scenes:
+  - scene_id: "sc-1"            # 必填，唯一字符串
+    scene_number: 1             # 必填，整数
+    slug:                       # 必填，必须是对象（不是字符串！）
+      location_type: "INT."     # 取值：INT. | EXT. | INT./EXT.
+      location_name: "汪淼家客厅"
+      time: "NIGHT"             # 取值：DAY|NIGHT|DAWN|DUSK|MORNING|AFTERNOON|EVENING|LATER|CONTINUOUS|SAME TIME
+    summary: "场景简述"
+    characters_present: ["c1"]  # 角色 id 列表（来自故事圣经名册）
+    props: []
+    blocks:                     # 必填，action 与 dialogue 交替
+      - block_id: "b-1"         # 每个 block 必填，唯一
+        order: 0                # 每个 block 必填，从 0 起的整数
+        type: "action"          # 取值：action | dialogue
+        text: "视觉动作描述"
+        source_ref: {{chapter: 1, paragraph: 3, quote: "原文引用"}}
+      - block_id: "b-2"
+        order: 1
+        type: "dialogue"
+        char_id: "c1"
+        char_name: "汪淼"
+        line: "对白内容"
+        parenthetical: "（颤抖）"   # 可选
+    annotations: []
+
+硬性要求：
+- slug 必须是对象（含 location_type / location_name / time 三个字段），**严禁写成 "INT. 地点 - 时间" 这样的字符串**。
+- 每个 scene 必须有 scene_id；每个 block 必须有 block_id 和 order（从 0 递增的整数）。
+- location_type 与 time 必须使用上面列出的英文枚举值（不要用中文）。
+- char_id 必须来自故事圣经的角色名册；scene 边界基于地点变化 / 时间跳跃 / 叙事断裂。
 
 ---
 

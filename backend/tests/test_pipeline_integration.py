@@ -437,3 +437,47 @@ async def test_astream_node_outputs_are_dicts(mock_llm_response, sample_chapters
                     saw_splitter = True
 
         assert saw_splitter, "stage_1_splitter path was not exercised"
+
+
+@pytest.mark.asyncio
+async def test_full_pipeline_produces_script(mock_llm_response, sample_chapters):
+    """End-to-end: a passing Story Bible + chapter scenes yield an assembled
+    script. Guards the Send payload (stage_1_chapter must receive chapters /
+    providers via {**state}), scene normalization, and assembly — without the
+    Send fix stage_1 fails with "未找到" and no script is produced."""
+    mock_chat = mock_llm_response(STORY_BIBLE_JSON, CHAPTER_SCENE_JSON)
+    with patch(
+        "app.pipeline.nodes.create_chat_model_from_config",
+        return_value=mock_chat,
+    ):
+        state: ConversionState = {
+            "project_id": str(uuid.uuid4()),
+            "project_title": "测试项目",
+            "run_id": "test-run-full",
+            "chapters": sample_chapters,
+            "errors": [],
+            "chapter_scripts": {},
+            "quality_checks": {},
+            "retry_counts": {},
+            "provider_assignments": {
+                "stage_0": "test-provider",
+                "stage_1": "test-provider",
+                "stage_2": "test-provider",
+            },
+            "status": "running",
+        }
+        config = {
+            "configurable": {
+                "thread_id": "test-run-full",
+                "providers": PROVIDER_CONFIG,
+            }
+        }
+        graph = build_conversion_graph()
+
+        async for _event in graph.astream(state, config=config):
+            pass
+        snapshot = await graph.aget_state(config)
+
+    script = (snapshot.values or {}).get("assembled_script")
+    assert script is not None, "no assembled_script — stage_1 produced no scenes"
+    assert len(script.get("scenes", [])) >= 1

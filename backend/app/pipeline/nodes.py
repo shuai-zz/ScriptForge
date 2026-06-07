@@ -414,6 +414,97 @@ def stage_1_splitter(state: ConversionState) -> dict:
     }
 
 
+_SCRIPT_TIME_OF_DAY = {
+    "DAY", "NIGHT", "DAWN", "DUSK", "MORNING",
+    "AFTERNOON", "EVENING", "LATER", "CONTINUOUS", "SAME TIME",
+}
+_TIME_OF_DAY_CN = {
+    "黎明": "DAWN", "拂晓": "DAWN",
+    "清晨": "MORNING", "早晨": "MORNING", "早上": "MORNING", "上午": "MORNING",
+    "中午": "AFTERNOON", "下午": "AFTERNOON", "午后": "AFTERNOON",
+    "白天": "DAY", "日间": "DAY",
+    "黄昏": "DUSK", "傍晚": "DUSK",
+    "晚上": "EVENING",
+    "夜晚": "NIGHT", "夜间": "NIGHT", "深夜": "NIGHT", "午夜": "NIGHT", "夜": "NIGHT",
+}
+
+
+def _coerce_time_of_day(value) -> str:
+    if isinstance(value, str):
+        v = value.strip()
+        if v.upper() in _SCRIPT_TIME_OF_DAY:
+            return v.upper()
+        for cn, en in _TIME_OF_DAY_CN.items():
+            if cn in v:
+                return en
+    return "DAY"
+
+
+def _coerce_location_type(value) -> str:
+    text = str(value or "")
+    upper = text.upper().replace(" ", "")
+    if upper.startswith(("INT./EXT", "INT/EXT")) or "内外" in text:
+        return "INT./EXT."
+    if upper.startswith("EXT") or "外景" in text or text.startswith("外"):
+        return "EXT."
+    return "INT."
+
+
+def _coerce_slug(value) -> dict:
+    """Coerce a slug (string like 'INT. 地点 - 夜' or a partial dict) to a valid Slug."""
+    if isinstance(value, dict):
+        return {
+            "location_type": _coerce_location_type(value.get("location_type")),
+            "location_name": str(value.get("location_name") or value.get("name") or "未知地点"),
+            "time": _coerce_time_of_day(value.get("time")),
+        }
+    if isinstance(value, str):
+        rest = value.strip()
+        for prefix in ("INT./EXT.", "INT.", "EXT.", "INT", "EXT", "内外景", "内景", "外景"):
+            if rest.upper().startswith(prefix.upper()) or rest.startswith(prefix):
+                rest = rest[len(prefix):].strip(" .-：:")
+                break
+        name, time = rest, ""
+        for sep in (" - ", " – ", " — ", "－", "-"):
+            if sep in rest:
+                name, _, time = rest.rpartition(sep)
+                name, time = name.strip(), time.strip()
+                break
+        return {
+            "location_type": _coerce_location_type(value),
+            "location_name": name or "未知地点",
+            "time": _coerce_time_of_day(time),
+        }
+    return {"location_type": "INT.", "location_name": "未知地点", "time": "DAY"}
+
+
+def _normalize_scene(scene: dict, chapter_number, index: int) -> dict:
+    """Best-effort coercion of an LLM scene into the Scene schema shape.
+
+    Fills required housekeeping fields the model often omits (scene_id, per-block
+    block_id/order) and turns a slug string into the required object.
+    """
+    if not isinstance(scene, dict):
+        return scene
+    scene.setdefault("scene_id", f"sc-{chapter_number}-{index + 1}")
+    if not isinstance(scene.get("scene_number"), int):
+        scene["scene_number"] = index + 1
+    scene["slug"] = _coerce_slug(scene.get("slug"))
+    blocks = scene.get("blocks")
+    if isinstance(blocks, list):
+        for j, block in enumerate(blocks):
+            if not isinstance(block, dict):
+                continue
+            block.setdefault("block_id", f"b-{chapter_number}-{index + 1}-{j}")
+            if not isinstance(block.get("order"), int):
+                block["order"] = j
+            if block.get("type") not in ("action", "dialogue"):
+                block["type"] = (
+                    "dialogue" if (block.get("line") or block.get("char_name")) else "action"
+                )
+    return scene
+
+
 async def stage_1_chapter(
     state: ConversionState, config: RunnableConfig
 ) -> dict:
@@ -511,7 +602,12 @@ async def stage_1_chapter(
         else:
             scenes_data = [data] if data else []
 
-        scenes = [Scene.model_validate(s).model_dump() for s in scenes_data]
+        scenes = [
+            Scene.model_validate(
+                _normalize_scene(s, chapter_number, i)
+            ).model_dump(mode="json")
+            for i, s in enumerate(scenes_data)
+        ]
     except Exception as exc:
         return {
             "errors": [f"第 {chapter_number} 章场景解析失败: {exc}"],
@@ -604,7 +700,7 @@ def stage_2_assemble(state: ConversionState) -> dict:
         }
 
     return {
-        "assembled_script": script.model_dump(),
+        "assembled_script": script.model_dump(mode="json"),
         "status": "running",
         "progress": {
             "current_stage": "stage_2_assemble",
