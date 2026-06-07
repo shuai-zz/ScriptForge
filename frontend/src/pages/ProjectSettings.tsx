@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { PageLoader } from "@/components/PageLoader";
 import { useParams, useNavigate } from "react-router-dom";
 import { ArrowLeft, Cog, Save } from "lucide-react";
-import { useToast } from "../components/ToastContainer";
+import { toast } from "../components/ToastContext";
 
 interface ProjectConfig {
   schema_version: string;
@@ -62,7 +62,6 @@ const EXPORT_FORMATS = [
 export default function ProjectSettings() {
   const { projectId } = useParams<{ projectId: string }>();
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

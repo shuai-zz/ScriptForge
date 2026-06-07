@@ -3,13 +3,14 @@ import { PageLoader } from "@/components/PageLoader";
 import { useNavigate } from "react-router-dom";
 import {
   BookOpen,
+  Bot,
   Clapperboard,
   Plus,
   Trash2,
   Users,
   X,
 } from "lucide-react";
-import { useToast } from "../components/ToastContainer";
+import { toast } from "../components/ToastContext";
 import { EmptyState } from "@/components/EmptyState";
 import { motion } from "framer-motion";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
@@ -42,7 +43,6 @@ const FORMAT_LABELS: Record<string, string> = {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const { toast } = useToast();
 
   const [projects, setProjects] = useState<ProjectCard[]>([]);
   const [loading, setLoading] = useState(true);
@@ -150,13 +150,22 @@ export default function Dashboard() {
             AI 辅助剧本创作工坊 — 将小说转换为结构化剧本
           </p>
         </div>
-        <button
-          onClick={() => setCreateOpen(true)}
-          className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-primary-hover"
-        >
-          <Plus className="h-4 w-4" />
-          新建项目
-        </button>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => navigate("/providers")}
+            className="flex items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-text-secondary transition-colors hover:border-primary/30 hover:text-text-primary"
+          >
+            <Bot className="h-4 w-4" />
+            模型配置
+          </button>
+          <button
+            onClick={() => setCreateOpen(true)}
+            className="flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-black transition-colors hover:bg-primary-hover"
+          >
+            <Plus className="h-4 w-4" />
+            新建项目
+          </button>
+        </div>
       </div>
 
       <h2 className="mb-6 text-lg font-medium text-text-primary">📖 我的项目</h2>

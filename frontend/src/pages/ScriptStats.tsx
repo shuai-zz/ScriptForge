@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageLoader } from "@/components/PageLoader";
 import { useParams } from "react-router-dom";
 import { BarChart3, Users, Film, MessageSquare } from "lucide-react";
-import { useToast } from "@/components/ToastContainer";
+import { toast } from "@/components/ToastContext";
 import { cn } from "@/lib/utils";
 
 interface SceneData {
@@ -21,15 +21,13 @@ interface ScriptData {
 
 export default function ScriptStats() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { toast } = useToast();
   const [script, setScript] = useState<ScriptData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchScript = useCallback(async () => {
     setLoading(true);
     try {
-      // Try to load script from export endpoint
-      const res = await fetch(`/api/projects/${projectId}/export/yaml`);
+      const res = await fetch(`/api/projects/${projectId}/script`);
       if (!res.ok) {
         if (res.status === 404) {
           setScript(null);
@@ -37,11 +35,7 @@ export default function ScriptStats() {
         }
         throw new Error("加载失败");
       }
-      const _yamlText = await res.text();
-      // Simple YAML-like parsing for stats (in real app use js-yaml)
-      // Fallback: use demo-like empty state
-      void _yamlText;
-      setScript(null);
+      setScript(await res.json());
     } catch {
       toast("error", "加载剧本数据失败");
     } finally {

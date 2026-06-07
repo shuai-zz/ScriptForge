@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageLoader } from "@/components/PageLoader";
 import { useParams } from "react-router-dom";
 import { Users, Plus, Trash2, X, Network } from "lucide-react";
-import { useToast } from "@/components/ToastContainer";
+import { toast } from "@/components/ToastContext";
 import { cn } from "@/lib/utils";
 import CharacterGraph from "@/components/CharacterGraph";
 import { EmptyState } from "@/components/EmptyState";
@@ -39,7 +39,6 @@ const ROLE_LABELS: Record<string, string> = {
 
 export default function CharactersPage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { toast } = useToast();
 
   const [characters, setCharacters] = useState<CharacterItem[]>([]);
   const [relationships, setRelationships] = useState<RelationshipItem[]>([]);
@@ -47,9 +46,13 @@ export default function CharactersPage() {
   const [selectedCharId, setSelectedCharId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"list" | "graph">("list");
   const [editing, setEditing] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const [form, setForm] = useState<Partial<CharacterItem>>({});
   const [showRelForm, setShowRelForm] = useState(false);
   const [relForm, setRelForm] = useState({ source: "", target: "", type: "friend", intensity: 3 });
+  const [relError, setRelError] = useState<string | null>(null);
+  const [highlightId, setHighlightId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -76,26 +79,61 @@ export default function CharactersPage() {
     [characters, selectedCharId]
   );
 
-  const handleCreate = async () => {
-    try {
-      const res = await fetch(`/api/projects/${projectId}/characters`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: "新角色", role_type: "supporting" }),
-      });
-      if (!res.ok) throw new Error("创建失败");
-      const char = await res.json();
-      setCharacters((prev) => [...prev, char]);
-      setSelectedCharId(char.id);
-      setEditing(true);
-      setForm(char);
-      toast("success", "角色已创建");
-    } catch {
-      toast("error", "创建失败");
-    }
+  // Open an empty editor for a brand-new character. Nothing is persisted until
+  // the user fills in a name and clicks 保存 (create-on-save).
+  const handleNewCharacter = () => {
+    setSelectedCharId(null);
+    setIsCreating(true);
+    setEditing(true);
+    setForm({ name: "", role_type: "supporting", aliases: [], traits: [] });
+    setActiveTab("list");
   };
 
-  const handleUpdate = async () => {
+  const handleCancelEdit = () => {
+    setEditing(false);
+    setIsCreating(false);
+    setForm({});
+  };
+
+  const handleSave = async () => {
+    const name = (form.name || "").trim();
+    if (!name) return;
+
+    // Create-on-save: a new character is POSTed only here, with the filled form.
+    if (isCreating) {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/characters`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name,
+            role_type: form.role_type || "supporting",
+            aliases: form.aliases || [],
+            traits: form.traits || [],
+          }),
+        });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ detail: "创建失败" }));
+          throw new Error(err.detail || "创建失败");
+        }
+        const char = await res.json();
+        setCharacters((prev) => [...prev, char]);
+        setSelectedCharId(char.id);
+        setIsCreating(false);
+        setEditing(false);
+        setHighlightId(char.id);
+        setTimeout(() => setHighlightId(null), 1500);
+        requestAnimationFrame(() => {
+          const el = listRef.current?.querySelector(`[data-char-id="${char.id}"]`);
+          el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        });
+        toast("success", `角色「${char.name}」已创建`);
+      } catch (err) {
+        toast("error", err instanceof Error ? err.message : "创建失败");
+      }
+      return;
+    }
+
     if (!selectedCharId) return;
     try {
       const res = await fetch(`/api/projects/${projectId}/characters/${selectedCharId}`, {
@@ -127,24 +165,34 @@ export default function CharactersPage() {
   };
 
   const handleCreateRelationship = async () => {
+    if (!selectedChar) return;
+    if (!relForm.target) {
+      setRelError("请选择目标角色");
+      return;
+    }
+    setRelError(null);
     try {
       const res = await fetch(`/api/projects/${projectId}/characters/relationships`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          source_character_id: relForm.source,
+          source_character_id: selectedChar.id,
           target_character_id: relForm.target,
           type: relForm.type,
           intensity: relForm.intensity,
         }),
       });
-      if (!res.ok) throw new Error("创建失败");
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "创建失败" }));
+        throw new Error(err.detail || "创建失败");
+      }
       const rel = await res.json();
       setRelationships((prev) => [...prev, rel]);
       setShowRelForm(false);
+      setRelForm({ source: "", target: "", type: "friend", intensity: 3 });
       toast("success", "关系已创建");
-    } catch {
-      toast("error", "创建关系失败");
+    } catch (err) {
+      toast("error", err instanceof Error ? err.message : "创建关系失败");
     }
   };
 
@@ -201,7 +249,7 @@ export default function CharactersPage() {
             关系图
           </button>
           <button
-            onClick={handleCreate}
+            onClick={handleNewCharacter}
             className="flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-black transition-colors hover:bg-primary-hover"
           >
             <Plus size={14} />
@@ -222,19 +270,22 @@ export default function CharactersPage() {
                   description="添加角色以管理人物信息和关系网络。"
                 />
               ) : (
-                <div className="space-y-1">
+                <div ref={listRef} className="space-y-1">
                   {characters.map((c) => (
                     <button
                       key={c.id}
+                      data-char-id={c.id}
                       onClick={() => {
                         setSelectedCharId(c.id);
                         setEditing(false);
+                        setIsCreating(false);
                       }}
                       className={cn(
                         "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left transition-colors",
                         selectedCharId === c.id
                           ? "bg-primary-muted"
-                          : "hover:bg-card"
+                          : "hover:bg-card",
+                        highlightId === c.id && "ring-2 ring-primary animate-pulse"
                       )}
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-card text-sm font-bold text-text-primary">
@@ -262,59 +313,68 @@ export default function CharactersPage() {
 
           {/* Detail Panel */}
           <div className="flex-1 overflow-y-auto p-6">
-            {selectedChar ? (
+            {isCreating || selectedChar ? (
               <div className="mx-auto max-w-xl">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-xl font-bold text-text-primary">{selectedChar.name}</h2>
+                  <h2 className="text-xl font-bold text-text-primary">
+                    {isCreating ? "新建角色" : selectedChar?.name}
+                  </h2>
                   <div className="flex gap-2">
                     {editing ? (
                       <>
                         <button
-                          onClick={() => setEditing(false)}
+                          onClick={handleCancelEdit}
                           className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-card"
                         >
                           取消
                         </button>
                         <button
-                          onClick={handleUpdate}
-                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-black hover:bg-primary-hover"
+                          onClick={handleSave}
+                          disabled={!(form.name || "").trim()}
+                          className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-black hover:bg-primary-hover disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           保存
                         </button>
                       </>
                     ) : (
+                      selectedChar && (
+                        <button
+                          onClick={() => {
+                            setEditing(true);
+                            setForm(selectedChar);
+                          }}
+                          className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-card"
+                        >
+                          编辑
+                        </button>
+                      )
+                    )}
+                    {!isCreating && selectedChar && (
                       <button
-                        onClick={() => {
-                          setEditing(true);
-                          setForm(selectedChar);
-                        }}
-                        className="rounded-lg border border-border px-3 py-1.5 text-xs text-text-secondary hover:bg-card"
+                        onClick={() => handleDelete(selectedChar.id)}
+                        className="rounded-lg p-1.5 text-text-muted hover:bg-rose-500/10 hover:text-rose-400"
                       >
-                        编辑
+                        <Trash2 size={14} />
                       </button>
                     )}
-                    <button
-                      onClick={() => handleDelete(selectedChar.id)}
-                      className="rounded-lg p-1.5 text-text-muted hover:bg-rose-500/10 hover:text-rose-400"
-                    >
-                      <Trash2 size={14} />
-                    </button>
                   </div>
                 </div>
 
                 {editing ? (
                   <div className="space-y-4">
                     <div>
-                      <label className="mb-1 block text-xs text-text-secondary">名称</label>
+                      <label htmlFor="char-name" className="mb-1 block text-xs text-text-secondary">名称</label>
                       <input
+                        id="char-name"
                         className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary"
                         value={form.name || ""}
                         onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs text-text-secondary">类型</label>
+                      <label htmlFor="char-role" className="mb-1 block text-xs text-text-secondary">类型</label>
                       <select
+                        id="char-role"
                         className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary"
                         value={form.role_type || "supporting"}
                         onChange={(e) => setForm((f) => ({ ...f, role_type: e.target.value }))}
@@ -325,8 +385,9 @@ export default function CharactersPage() {
                       </select>
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs text-text-secondary">别名（逗号分隔）</label>
+                      <label htmlFor="char-aliases" className="mb-1 block text-xs text-text-secondary">别名（逗号分隔）</label>
                       <input
+                        id="char-aliases"
                         className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary"
                         value={(form.aliases || []).join(", ")}
                         onChange={(e) =>
@@ -338,8 +399,9 @@ export default function CharactersPage() {
                       />
                     </div>
                     <div>
-                      <label className="mb-1 block text-xs text-text-secondary">特质（逗号分隔）</label>
+                      <label htmlFor="char-traits" className="mb-1 block text-xs text-text-secondary">特质（逗号分隔）</label>
                       <input
+                        id="char-traits"
                         className="w-full rounded-lg border border-border bg-card px-3 py-2 text-sm text-text-primary"
                         value={(form.traits || []).join(", ")}
                         onChange={(e) =>
@@ -351,7 +413,7 @@ export default function CharactersPage() {
                       />
                     </div>
                   </div>
-                ) : (
+                ) : selectedChar ? (
                   <div className="space-y-4">
                     <div className="rounded-lg border border-border bg-surface p-4">
                       <div className="mb-2 text-xs text-text-muted">类型</div>
@@ -394,7 +456,10 @@ export default function CharactersPage() {
                       <div className="mb-2 flex items-center justify-between">
                         <div className="text-xs text-text-muted">关系</div>
                         <button
-                          onClick={() => setShowRelForm(true)}
+                          onClick={() => {
+                            setShowRelForm(true);
+                            setRelError(null);
+                          }}
                           className="flex items-center gap-1 rounded bg-primary-muted px-2 py-0.5 text-[10px] text-primary hover:bg-primary/20"
                         >
                           <Plus size={10} /> 添加
@@ -444,7 +509,7 @@ export default function CharactersPage() {
                       )}
                     </div>
                   </div>
-                )}
+                ) : null}
               </div>
             ) : (
               <div className="flex h-full items-center justify-center text-text-muted">
@@ -509,6 +574,9 @@ export default function CharactersPage() {
                 />
                 <div className="text-center text-xs text-text-muted">{relForm.intensity}</div>
               </div>
+              {relError && (
+                <p className="text-xs text-error">{relError}</p>
+              )}
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button

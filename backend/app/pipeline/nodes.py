@@ -1,6 +1,7 @@
 """LangGraph pipeline nodes — Stage 0, Stage 1, Stage 2, and utilities."""
 
 import json
+import re
 
 import yaml
 from langchain_core.messages import HumanMessage
@@ -13,6 +14,163 @@ from app.schemas.story_bible import StoryBibleV1
 from app.services.llm_factory import LLMFactoryError, create_chat_model_from_config
 from app.services.prompt_registry import PromptRegistry
 from app.services.validators import ValidatorRunner
+
+
+# ── Stage 0 helpers ──
+
+_VALID_TIME_LABELS = {"now", "flashback", "flashforward"}
+_VALID_TIME_OF_DAY = {
+    "dawn", "morning", "afternoon", "dusk", "evening", "night", "midnight"
+}
+
+
+def _coerce_chapter_int(value, default: int = 1) -> int:
+    """Coerce a chapter value (e.g. '第1章', '1', 1) to a positive integer."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value if value >= 1 else default
+    if isinstance(value, str):
+        m = re.search(r"\d+", value)
+        if m:
+            n = int(m.group())
+            return n if n >= 1 else default
+    return default
+
+
+# Fields that are list[str] in StoryBibleV1 but where the LLM frequently emits
+# full objects instead of plain names — coerce each element back to a string.
+_STR_LIST_FIELDS = {
+    "new_characters",
+    "new_locations",
+    "foreshadowing_setups",
+    "foreshadowing_payoffs",
+    "textual_instances",
+    "visual_motifs",
+    "trigger_events",
+    "key_moments",
+    "key_props",
+    "scenes",
+}
+
+
+def _str_item(item):
+    """Reduce a value to a representative string (LLMs sometimes nest objects)."""
+    if isinstance(item, str):
+        return item
+    if isinstance(item, dict):
+        for key in (
+            "name", "description", "title", "label", "summary",
+            "character_id", "location_id", "item_id", "id",
+        ):
+            if item.get(key):
+                return str(item[key])
+        for value in item.values():
+            if isinstance(value, str) and value:
+                return value
+        return str(item)
+    return str(item)
+
+
+def _stringify_list(value):
+    return [_str_item(x) for x in value] if isinstance(value, list) else value
+
+
+def _coerce_str_lists(obj) -> None:
+    """Recursively coerce known list[str] fields whose elements are objects."""
+    if isinstance(obj, dict):
+        for key, value in obj.items():
+            if key in _STR_LIST_FIELDS and isinstance(value, list):
+                obj[key] = _stringify_list(value)
+            else:
+                _coerce_str_lists(value)
+    elif isinstance(obj, list):
+        for item in obj:
+            _coerce_str_lists(item)
+
+
+def _normalize_story_bible(data: dict) -> dict:
+    """Best-effort normalization of LLM output into the StoryBibleV1 shape.
+
+    LLMs frequently drift from the schema (wrong field names, '第N章' strings,
+    missing ids/enums). Map the common deviations so a finished analysis isn't
+    lost to a single field mismatch. Correct fields are left untouched, and
+    unknown extras are harmless (the models allow extra).
+    """
+    if not isinstance(data, dict):
+        return data
+
+    # Coerce any list[str] fields the model populated with objects (recursively).
+    _coerce_str_lists(data)
+
+    # Timeline events: fill required fields, alias common variants, coerce chapter.
+    timeline = data.get("timeline")
+    if isinstance(timeline, list):
+        for i, ev in enumerate(timeline):
+            if not isinstance(ev, dict):
+                continue
+            ev.setdefault("event_id", f"evt-{i + 1}")
+            if not ev.get("description"):
+                ev["description"] = (
+                    ev.get("event") or ev.get("summary") or ev.get("title") or ""
+                )
+            if ev.get("time_label") not in _VALID_TIME_LABELS:
+                ev["time_label"] = "now"
+            if ev.get("time_of_day") not in _VALID_TIME_OF_DAY:
+                ev["time_of_day"] = "afternoon"
+            ev["chapter"] = _coerce_chapter_int(ev.get("chapter"))
+
+    # Themes: fill required fields, alias title -> name.
+    themes = data.get("themes")
+    if isinstance(themes, list):
+        for i, th in enumerate(themes):
+            if not isinstance(th, dict):
+                continue
+            th.setdefault("theme_id", f"theme-{i + 1}")
+            if not th.get("name"):
+                th["name"] = th.get("title") or th.get("theme") or f"主题 {i + 1}"
+            if not th.get("description"):
+                th["description"] = th.get("summary") or th.get("title") or ""
+
+    # Chapter synopses: coerce chapter_number.
+    synopses = data.get("chapter_synopses")
+    if isinstance(synopses, list):
+        for ch in synopses:
+            if isinstance(ch, dict) and "chapter_number" in ch:
+                ch["chapter_number"] = _coerce_chapter_int(ch.get("chapter_number"))
+
+    # Foreshadowing: ensure id + coerce chapter fields.
+    foreshadowing = data.get("foreshadowing_tracking")
+    if isinstance(foreshadowing, list):
+        for i, item in enumerate(foreshadowing):
+            if not isinstance(item, dict):
+                continue
+            item.setdefault("item_id", f"fs-{i + 1}")
+            if "setup_chapter" in item:
+                item["setup_chapter"] = _coerce_chapter_int(item.get("setup_chapter"))
+            if item.get("payoff_chapter") is not None:
+                item["payoff_chapter"] = _coerce_chapter_int(item.get("payoff_chapter"))
+
+    # Location index: coerce first_chapter.
+    locations = data.get("location_index")
+    if isinstance(locations, list):
+        for loc in locations:
+            if isinstance(loc, dict) and "first_chapter" in loc:
+                loc["first_chapter"] = _coerce_chapter_int(loc.get("first_chapter"))
+
+    # overall_synopsis is required — synthesize from real chapter summaries when
+    # the model omitted it. Only do so if there is genuine content to summarize;
+    # truly empty/garbage output is left to fail validation.
+    if not data.get("overall_synopsis"):
+        summaries = [
+            s.get("summary", "")
+            for s in (data.get("chapter_synopses") or [])
+            if isinstance(s, dict) and s.get("summary")
+        ]
+        if summaries:
+            data["overall_synopsis"] = " ".join(summaries).strip()[:1000]
+
+    return data
 
 
 # ── Stage 0 ──
@@ -152,6 +310,7 @@ async def stage_0_bible(state: ConversionState, config: RunnableConfig) -> dict:
             json_str = content.split("```")[1].split("```")[0].strip()
 
         data = json.loads(json_str)
+        data = _normalize_story_bible(data)
         story_bible = StoryBibleV1.model_validate(data)
     except Exception as exc:
         return {
@@ -246,7 +405,137 @@ def stage_1_splitter(state: ConversionState) -> dict:
     This node exists so that quality_gate_0 has a deterministic
     target to route to on success.
     """
-    return {}
+    return {
+        "progress": {
+            "current_stage": "stage_1_splitter",
+            "percent": 25,
+            "message": "开始章节转换",
+        },
+    }
+
+
+_SCRIPT_TIME_OF_DAY = {
+    "DAY", "NIGHT", "DAWN", "DUSK", "MORNING",
+    "AFTERNOON", "EVENING", "LATER", "CONTINUOUS", "SAME TIME",
+}
+_TIME_OF_DAY_CN = {
+    "黎明": "DAWN", "拂晓": "DAWN",
+    "清晨": "MORNING", "早晨": "MORNING", "早上": "MORNING", "上午": "MORNING",
+    "中午": "AFTERNOON", "下午": "AFTERNOON", "午后": "AFTERNOON",
+    "白天": "DAY", "日间": "DAY",
+    "黄昏": "DUSK", "傍晚": "DUSK",
+    "晚上": "EVENING",
+    "夜晚": "NIGHT", "夜间": "NIGHT", "深夜": "NIGHT", "午夜": "NIGHT", "夜": "NIGHT",
+}
+
+
+def _coerce_time_of_day(value) -> str:
+    if isinstance(value, str):
+        v = value.strip()
+        if v.upper() in _SCRIPT_TIME_OF_DAY:
+            return v.upper()
+        for cn, en in _TIME_OF_DAY_CN.items():
+            if cn in v:
+                return en
+    return "DAY"
+
+
+def _coerce_location_type(value) -> str:
+    text = str(value or "")
+    upper = text.upper().replace(" ", "")
+    if upper.startswith(("INT./EXT", "INT/EXT")) or "内外" in text:
+        return "INT./EXT."
+    if upper.startswith("EXT") or "外景" in text or text.startswith("外"):
+        return "EXT."
+    return "INT."
+
+
+def _coerce_slug(value) -> dict:
+    """Coerce a slug (string like 'INT. 地点 - 夜' or a partial dict) to a valid Slug."""
+    if isinstance(value, dict):
+        return {
+            "location_type": _coerce_location_type(value.get("location_type")),
+            "location_name": str(value.get("location_name") or value.get("name") or "未知地点"),
+            "time": _coerce_time_of_day(value.get("time")),
+        }
+    if isinstance(value, str):
+        rest = value.strip()
+        for prefix in ("INT./EXT.", "INT.", "EXT.", "INT", "EXT", "内外景", "内景", "外景"):
+            if rest.upper().startswith(prefix.upper()) or rest.startswith(prefix):
+                rest = rest[len(prefix):].strip(" .-：:")
+                break
+        name, time = rest, ""
+        for sep in (" - ", " – ", " — ", "－", "-"):
+            if sep in rest:
+                name, _, time = rest.rpartition(sep)
+                name, time = name.strip(), time.strip()
+                break
+        return {
+            "location_type": _coerce_location_type(value),
+            "location_name": name or "未知地点",
+            "time": _coerce_time_of_day(time),
+        }
+    return {"location_type": "INT.", "location_name": "未知地点", "time": "DAY"}
+
+
+def _first_int(value, default: int = 1) -> int:
+    """Extract the first integer from a value ('4-7' -> 4); else the default."""
+    if isinstance(value, bool):
+        return default
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        m = re.search(r"\d+", value)
+        if m:
+            return int(m.group())
+    return default
+
+
+def _normalize_scene(scene: dict, chapter_number, index: int) -> dict:
+    """Best-effort coercion of an LLM scene into the Scene schema shape.
+
+    Fills required housekeeping fields the model often omits (scene_id, per-block
+    block_id/order) and turns a slug string into the required object.
+    """
+    if not isinstance(scene, dict):
+        return scene
+    scene.setdefault("scene_id", f"sc-{chapter_number}-{index + 1}")
+    if not isinstance(scene.get("scene_number"), int):
+        scene["scene_number"] = index + 1
+    scene["slug"] = _coerce_slug(scene.get("slug"))
+    blocks = scene.get("blocks")
+    if isinstance(blocks, list):
+        for j, block in enumerate(blocks):
+            if not isinstance(block, dict):
+                continue
+            block.setdefault("block_id", f"b-{chapter_number}-{index + 1}-{j}")
+            if not isinstance(block.get("order"), int):
+                block["order"] = j
+            if block.get("type") not in ("action", "dialogue"):
+                block["type"] = (
+                    "dialogue" if (block.get("line") or block.get("char_name")) else "action"
+                )
+            if "annotation_refs" in block:
+                block["annotation_refs"] = _stringify_list(block["annotation_refs"])
+            # source_ref.chapter/paragraph are ints, but the model often writes a
+            # range like "4-7" or a "第N章" string — coerce to the first integer.
+            ref = block.get("source_ref")
+            if isinstance(ref, dict):
+                ref["chapter"] = _first_int(ref.get("chapter"), chapter_number or 1)
+                ref["paragraph"] = _first_int(ref.get("paragraph"), 1)
+                if not isinstance(ref.get("quote"), str):
+                    ref["quote"] = str(ref.get("quote") or "")
+            elif ref is not None:
+                block["source_ref"] = None  # malformed → drop (field is optional)
+    # scene.annotations is list[SceneAnnotationRef] ({annotation_id}); the model
+    # often drops a bare description string here — wrap it into a ref object.
+    anns = scene.get("annotations")
+    if isinstance(anns, list):
+        scene["annotations"] = [
+            a if isinstance(a, dict) else {"annotation_id": str(a)}
+            for a in anns
+        ]
+    return scene
 
 
 async def stage_1_chapter(
@@ -346,7 +635,12 @@ async def stage_1_chapter(
         else:
             scenes_data = [data] if data else []
 
-        scenes = [Scene.model_validate(s).model_dump() for s in scenes_data]
+        scenes = [
+            Scene.model_validate(
+                _normalize_scene(s, chapter_number, i)
+            ).model_dump(mode="json")
+            for i, s in enumerate(scenes_data)
+        ]
     except Exception as exc:
         return {
             "errors": [f"第 {chapter_number} 章场景解析失败: {exc}"],
@@ -417,6 +711,21 @@ def stage_2_assemble(state: ConversionState) -> dict:
             }
         )
 
+    # Carry characters over from the Story Bible's network so the script is
+    # self-contained (powers the editor's character refs and the stats page).
+    char_nodes = (story_bible.get("character_network") or {}).get("nodes") or []
+    characters = [
+        {
+            "character_id": n.get("character_id", ""),
+            "name": n.get("name", ""),
+            "role_type": n.get("role_type", "supporting"),
+            "aliases": [],
+            "traits": [],
+        }
+        for n in char_nodes
+        if isinstance(n, dict) and n.get("character_id") and n.get("name")
+    ]
+
     # Build ScriptV1
     try:
         script = ScriptV1(
@@ -424,6 +733,7 @@ def stage_2_assemble(state: ConversionState) -> dict:
                 title=project_title,
                 total_scenes=len(all_scenes),
             ),
+            characters=characters,
             scenes=all_scenes,
             scene_index=scene_index,
         )
@@ -439,7 +749,7 @@ def stage_2_assemble(state: ConversionState) -> dict:
         }
 
     return {
-        "assembled_script": script.model_dump(),
+        "assembled_script": script.model_dump(mode="json"),
         "status": "running",
         "progress": {
             "current_stage": "stage_2_assemble",
@@ -500,6 +810,25 @@ def quality_gate_2(state: ConversionState) -> dict:
                 f"角色一致性错误：{len(orphan_chars)} 个角色未在故事圣经中注册。"
             )
             passed = False
+
+        # ── Chapter coverage check (P0: ensure no chapter is silently dropped) ──
+        chapters = state.get("chapters", [])
+        if chapters:
+            expected_chapter_numbers = {ch["chapter_number"] for ch in chapters}
+            covered_chapters: set[int] = set()
+            for scene in scenes:
+                for block in scene.get("blocks", []):
+                    ref = block.get("source_ref")
+                    if isinstance(ref, dict):
+                        covered_chapters.add(ref.get("chapter", 0))
+
+            missing_chapters = sorted(expected_chapter_numbers - covered_chapters)
+            if missing_chapters:
+                issues.append(
+                    f"章节内容丢失：第 {', '.join(str(c) for c in missing_chapters)} 章"
+                    f"在剧本中没有任何场景，转换可能遗漏了这些章节的关键情节。"
+                )
+                passed = False
 
         # ── Semantic validators (Group 11) ──
         try:

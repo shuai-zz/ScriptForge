@@ -41,6 +41,7 @@ export default function Sidebar({ onClose }: SidebarProps) {
       {/* Global Nav */}
       <nav className="flex flex-col gap-1 px-2 md:px-0 md:items-center">
         <SidebarLink to="/" icon={Home} label="项目" onClick={onClose} />
+        <SidebarLink to="/providers" icon={Bot} label="AI 配置" onClick={onClose} />
       </nav>
 
       {/* Project Nav */}
@@ -52,7 +53,6 @@ export default function Sidebar({ onClose }: SidebarProps) {
           <SidebarLink to={`/projects/${projectId}/story-bible`} icon={FileText} label="圣经" onClick={onClose} />
           <SidebarLink to={`/projects/${projectId}/stats`} icon={LayoutDashboard} label="统计" onClick={onClose} />
           <SidebarLink to={`/projects/${projectId}/versions`} icon={Settings} label="版本" onClick={onClose} />
-          <SidebarLink to={`/projects/${projectId}/providers`} icon={Bot} label="模型" onClick={onClose} />
         </nav>
       )}
 

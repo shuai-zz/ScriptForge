@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { PageLoader } from "@/components/PageLoader";
 import { useParams } from "react-router-dom";
 import { BookOpen, Users, Clock, MapPin, Lightbulb } from "lucide-react";
-import { useToast } from "@/components/ToastContainer";
+import { toast } from "@/components/ToastContext";
 
 interface StoryBibleData {
   id: string;
@@ -12,7 +12,6 @@ interface StoryBibleData {
 
 export default function StoryBiblePage() {
   const { projectId } = useParams<{ projectId: string }>();
-  const { toast } = useToast();
   const [bible, setBible] = useState<StoryBibleData | null>(null);
   const [loading, setLoading] = useState(true);
 

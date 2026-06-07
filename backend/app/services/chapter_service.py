@@ -1,7 +1,6 @@
 """Chapter CRUD service."""
 
 import uuid
-from datetime import datetime, timezone
 
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -72,7 +71,6 @@ class ChapterService:
             if hasattr(chapter, key):
                 setattr(chapter, key, value)
 
-        chapter.updated_at = datetime.now(timezone.utc)
         await db.commit()
         await db.refresh(chapter)
         return chapter
@@ -90,10 +88,29 @@ class ChapterService:
     async def reorder(
         db: AsyncSession, project_id: uuid.UUID, chapter_ids: list[uuid.UUID]
     ) -> None:
-        """Reassign chapter numbers based on the ordered list of IDs."""
-        for idx, cid in enumerate(chapter_ids, start=1):
+        """Reassign chapter numbers based on the ordered list of IDs.
+
+        Renumbering happens in two phases to avoid transiently violating the
+        ``(project_id, number)`` unique constraint when chapters swap places:
+        first park every chapter at a unique negative number and flush, then
+        assign the final ``1..N`` sequence. The intermediate flush is required —
+        without it SQLAlchemy collapses each object's negative-then-final write
+        into a single UPDATE, reintroducing the collision.
+        """
+        chapters: list[Chapter] = []
+        for cid in chapter_ids:
             ch = await ChapterService.get(db, cid)
-            if ch and ch.project_id == project_id and ch.number != idx:
-                ch.number = idx
-                ch.updated_at = datetime.now(timezone.utc)
+            if ch and ch.project_id == project_id:
+                chapters.append(ch)
+        if not chapters:
+            return
+
+        # Phase 1: park at negative numbers that cannot collide with live rows.
+        for offset, ch in enumerate(chapters, start=1):
+            ch.number = -offset
+        await db.flush()
+
+        # Phase 2: assign the final positions.
+        for idx, ch in enumerate(chapters, start=1):
+            ch.number = idx
         await db.commit()

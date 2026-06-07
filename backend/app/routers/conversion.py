@@ -1,8 +1,10 @@
 """Conversion pipeline endpoints: SSE streaming progress."""
 
 import json
+import logging
 import uuid
 
+import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.runnables import RunnableConfig
@@ -13,8 +15,17 @@ from app.database import async_session_factory
 from app.models.chapter import Chapter
 from app.models.conversion import ConversionRun, LLMProvider
 from app.models.project import Project
+from app.models.script import Script
+from app.models.story_bible import StoryBible
 from app.pipeline.graph import build_conversion_graph
 from app.pipeline.state import ConversionState
+from app.schemas.script import ScriptV1
+from app.services.character_service import (
+    CharacterRelationshipService,
+    CharacterService,
+)
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/projects/{project_id}/convert", tags=["conversion"])
 
@@ -104,6 +115,9 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
         try:
             async for event in graph.astream(state, config=config):
                 for node_name, node_output in event.items():
+                    # LangGraph yields None for nodes that produce no state
+                    # update (e.g. the stage_1_splitter no-op) — guard against it.
+                    node_output = node_output or {}
                     progress = node_output.get("progress", {})
                     if progress:
                         final_stage = progress.get("current_stage", final_stage)
@@ -145,6 +159,11 @@ async def convert_stream(project_id: uuid.UUID) -> StreamingResponse:
                 run.stage = final_stage
                 run.error_message = final_error
                 await db.commit()
+
+        # Persist the assembled script once the run has completed
+        if final_status == "completed":
+            await _persist_script(project_id, graph, config)
+            await _persist_bible_and_characters(project_id, graph, config)
 
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
@@ -284,6 +303,9 @@ async def resume_conversion(
             # Resume from checkpoint by passing None as input
             async for event in graph.astream(None, config=config):
                 for node_name, node_output in event.items():
+                    # LangGraph yields None for nodes that produce no state
+                    # update (e.g. the stage_1_splitter no-op) — guard against it.
+                    node_output = node_output or {}
                     progress = node_output.get("progress", {})
                     if progress:
                         final_stage = progress.get("current_stage", final_stage)
@@ -326,6 +348,11 @@ async def resume_conversion(
                 run.error_message = final_error
                 await db.commit()
 
+        # Persist the assembled script once the run has completed
+        if final_status == "completed":
+            await _persist_script(project_id, graph, config)
+            await _persist_bible_and_characters(project_id, graph, config)
+
         yield _sse_event(
             {"current_stage": "done", "percent": 100, "message": "转换完成"}
         )
@@ -358,10 +385,12 @@ async def _load_project_providers(
     )
     chapters = result.scalars().all()
 
-    result = await db.execute(
-        select(LLMProvider).where(LLMProvider.project_id == project_id)
-    )
+    result = await db.execute(select(LLMProvider))
     providers_orm = result.scalars().all()
+    if not providers_orm:
+        raise HTTPException(
+            status_code=400, detail="请先在首页配置 AI 模型"
+        )
 
     providers: dict[str, dict] = {}
     for p in providers_orm:
@@ -393,3 +422,123 @@ async def _load_project_providers(
                 provider_assignments[stage] = first_id
 
     return project, chapters, providers, provider_assignments
+
+
+async def _persist_script(
+    project_id: uuid.UUID, graph, config: RunnableConfig
+) -> None:
+    """Persist the assembled ScriptV1 to the ``scripts`` table (upsert by project).
+
+    Best-effort: reads the final pipeline state from the graph checkpointer and
+    writes the YAML. Any failure is logged but never propagated — persistence
+    must not break a finished conversion.
+    """
+    try:
+        snapshot = await graph.aget_state(config)
+        assembled = (snapshot.values or {}).get("assembled_script")
+        if not assembled:
+            return
+        script = ScriptV1.model_validate(assembled)
+        script_json = script.model_dump(mode="json")
+        yaml_str = yaml.safe_dump(
+            script_json,
+            allow_unicode=True,
+            sort_keys=False,
+            default_flow_style=False,
+        )
+        async with async_session_factory() as db:
+            result = await db.execute(
+                select(Script).where(Script.project_id == project_id)
+            )
+            row = result.scalar_one_or_none()
+            if row:
+                row.yaml_content = yaml_str
+                row.script_metadata = script_json.get("metadata")
+            else:
+                db.add(
+                    Script(
+                        project_id=project_id,
+                        yaml_content=yaml_str,
+                        script_metadata=script_json.get("metadata"),
+                    )
+                )
+            await db.commit()
+    except Exception:
+        logger.exception("Failed to persist script for project %s", project_id)
+
+
+async def _persist_bible_and_characters(
+    project_id: uuid.UUID, graph, config: RunnableConfig
+) -> None:
+    """Persist the Story Bible and its characters/relationships after a run.
+
+    Upserts the bible into ``story_bibles`` and creates Character /
+    CharacterRelationship rows from the bible's ``character_network`` (skipping
+    any that already exist by name, so user-added characters are preserved).
+    Best-effort: any failure is logged, never propagated.
+    """
+    try:
+        snapshot = await graph.aget_state(config)
+        bible = (snapshot.values or {}).get("story_bible")
+        if not bible:
+            return
+
+        async with async_session_factory() as db:
+            # 1) Upsert the Story Bible content.
+            result = await db.execute(
+                select(StoryBible).where(StoryBible.project_id == project_id)
+            )
+            row = result.scalar_one_or_none()
+            if row:
+                row.content = bible
+            else:
+                db.add(StoryBible(project_id=project_id, content=bible))
+            await db.commit()
+
+            # 2) Characters from character_network.nodes (dedupe by name).
+            network = bible.get("character_network") or {}
+            existing = await CharacterService.list_by_project(db, project_id)
+            by_name = {c.name: c for c in existing}
+            id_map: dict[str, object] = {}
+            for node in network.get("nodes") or []:
+                name = node.get("name")
+                if not name:
+                    continue
+                char = by_name.get(name)
+                if char is None:
+                    char = await CharacterService.create(
+                        db,
+                        project_id=project_id,
+                        name=name,
+                        role_type=node.get("role_type", "supporting"),
+                        aliases=[],
+                        traits=[],
+                    )
+                    by_name[name] = char
+                if node.get("character_id"):
+                    id_map[node["character_id"]] = char
+
+            # 3) Relationships from character_network.edges (skip duplicates).
+            existing_rels = await CharacterRelationshipService.list_by_project(
+                db, project_id
+            )
+            seen = {(r.source_character_id, r.target_character_id) for r in existing_rels}
+            for edge in network.get("edges") or []:
+                src = id_map.get(edge.get("source"))
+                tgt = id_map.get(edge.get("target"))
+                if not src or not tgt or (src.id, tgt.id) in seen:
+                    continue
+                intensity = max(1, min(5, int(edge.get("intensity", 3) or 3)))
+                await CharacterRelationshipService.create(
+                    db,
+                    project_id=project_id,
+                    source_character_id=src.id,
+                    target_character_id=tgt.id,
+                    type=str(edge.get("type", "other")),
+                    intensity=intensity,
+                )
+                seen.add((src.id, tgt.id))
+    except Exception:
+        logger.exception(
+            "Failed to persist story bible / characters for project %s", project_id
+        )

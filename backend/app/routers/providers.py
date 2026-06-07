@@ -1,9 +1,12 @@
-"""LLM Provider CRUD endpoints."""
+"""Global LLM Provider CRUD endpoints.
 
-import uuid
+Providers are configured once globally (from the home page) and shared by all
+projects. Each provider is identified by a unique ``provider_id``.
+"""
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.encryption import encrypt, mask_key
@@ -15,7 +18,7 @@ from app.schemas.provider import (
     ProviderUpdate,
 )
 
-router = APIRouter(prefix="/api/projects/{project_id}/providers", tags=["providers"])
+router = APIRouter(prefix="/api/providers", tags=["providers"])
 
 
 def _to_response(provider: LLMProvider) -> ProviderResponse:
@@ -36,16 +39,12 @@ def _to_response(provider: LLMProvider) -> ProviderResponse:
 
 @router.post("", response_model=ProviderResponse, status_code=201)
 async def create_provider(
-    project_id: uuid.UUID,
     data: ProviderCreate,
     db: AsyncSession = Depends(get_db),
 ) -> ProviderResponse:
-    """Create a new LLM provider with encrypted API key."""
+    """Create a new global LLM provider with an encrypted API key."""
     provider = LLMProvider(
-        project_id=project_id,
-        provider_id=f"prov-{data.label.lower().replace(' ', '-')}"
-        if not hasattr(data, "provider_id")
-        else data.provider_id,
+        provider_id=f"prov-{data.label.lower().replace(' ', '-')}",
         label=data.label,
         provider_type=data.provider_type.value,
         model_name=data.model_name,
@@ -55,36 +54,33 @@ async def create_provider(
         parameters=data.parameters.model_dump(),
     )
     db.add(provider)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="同名配置已存在，请换一个显示名称")
     await db.refresh(provider)
     return _to_response(provider)
 
 
 @router.get("", response_model=list[ProviderResponse])
 async def list_providers(
-    project_id: uuid.UUID,
     db: AsyncSession = Depends(get_db),
 ) -> list[ProviderResponse]:
-    """List all providers for a project (keys masked)."""
-    result = await db.execute(
-        select(LLMProvider).where(LLMProvider.project_id == project_id)
-    )
+    """List all global providers (keys masked)."""
+    result = await db.execute(select(LLMProvider))
     providers = result.scalars().all()
     return [_to_response(p) for p in providers]
 
 
 @router.get("/{provider_id}", response_model=ProviderResponse)
 async def get_provider(
-    project_id: uuid.UUID,
     provider_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> ProviderResponse:
     """Get a single provider by its business ID."""
     result = await db.execute(
-        select(LLMProvider).where(
-            LLMProvider.project_id == project_id,
-            LLMProvider.provider_id == provider_id,
-        )
+        select(LLMProvider).where(LLMProvider.provider_id == provider_id)
     )
     provider = result.scalar_one_or_none()
     if not provider:
@@ -94,17 +90,13 @@ async def get_provider(
 
 @router.put("/{provider_id}", response_model=ProviderResponse)
 async def update_provider(
-    project_id: uuid.UUID,
     provider_id: str,
     data: ProviderUpdate,
     db: AsyncSession = Depends(get_db),
 ) -> ProviderResponse:
     """Update a provider. If api_key is provided, it will be re-encrypted."""
     result = await db.execute(
-        select(LLMProvider).where(
-            LLMProvider.project_id == project_id,
-            LLMProvider.provider_id == provider_id,
-        )
+        select(LLMProvider).where(LLMProvider.provider_id == provider_id)
     )
     provider = result.scalar_one_or_none()
     if not provider:
@@ -132,16 +124,12 @@ async def update_provider(
 
 @router.delete("/{provider_id}", status_code=204)
 async def delete_provider(
-    project_id: uuid.UUID,
     provider_id: str,
     db: AsyncSession = Depends(get_db),
 ) -> None:
     """Delete a provider."""
     result = await db.execute(
-        select(LLMProvider).where(
-            LLMProvider.project_id == project_id,
-            LLMProvider.provider_id == provider_id,
-        )
+        select(LLMProvider).where(LLMProvider.provider_id == provider_id)
     )
     provider = result.scalar_one_or_none()
     if not provider:

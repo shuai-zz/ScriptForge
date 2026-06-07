@@ -342,7 +342,33 @@ class CharacterAppearanceValidator:
         return findings
 
 
-# ── 11.7 ValidatorRunner ──
+# ── 11.7 SourceRefCoverageValidator ──
+
+
+class SourceRefCoverageValidator:
+    """Ensure every block has a source_ref pointing back to the original chapter."""
+
+    def validate(self, script: ScriptV1) -> list[ValidationFinding]:
+        findings: list[ValidationFinding] = []
+
+        for scene in script.scenes:
+            for block in scene.blocks:
+                if block.source_ref is None:
+                    findings.append(
+                        ValidationFinding(
+                            validator=self.__class__.__name__,
+                            severity=ValidationSeverity.WARNING,
+                            message="block 缺少 source_ref，无法追溯原文出处。",
+                            scene_id=scene.scene_id,
+                            scene_number=scene.scene_number,
+                            block_id=block.block_id,
+                        )
+                    )
+
+        return findings
+
+
+# ── 11.8 ValidatorRunner ──
 
 
 DEFAULT_VALIDATORS: list[Validator] = [
@@ -352,6 +378,7 @@ DEFAULT_VALIDATORS: list[Validator] = [
     SceneNumberContinuityValidator(),
     TimelineCoherenceValidator(),
     CharacterAppearanceValidator(),
+    SourceRefCoverageValidator(),
 ]
 
 

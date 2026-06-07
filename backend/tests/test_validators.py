@@ -19,6 +19,7 @@ from app.services.validators import (
     DialogueActionAlternationValidator,
     SceneNumberContinuityValidator,
     SlugLineValidator,
+    SourceRefCoverageValidator,
     TimelineCoherenceValidator,
     ValidationSeverity,
     ValidatorRunner,
@@ -428,6 +429,8 @@ class TestCharacterAppearanceValidator:
 
 class TestValidatorRunner:
     def test_valid_script_passes(self):
+        from app.schemas.script import SourceRef
+
         script = _make_script(
             characters=[
                 ScriptCharacter(character_id="c1", name="Alice", role_type=RoleType.PROTAGONIST),
@@ -437,8 +440,17 @@ class TestValidatorRunner:
                     1,
                     characters_present=["c1"],
                     blocks=[
-                        _make_block(BlockType.ACTION, order=0),
-                        _make_block(BlockType.DIALOGUE, order=1, char_id="c1"),
+                        _make_block(
+                            BlockType.ACTION,
+                            order=0,
+                            source_ref=SourceRef(chapter=1, paragraph=1, quote="原文"),
+                        ),
+                        _make_block(
+                            BlockType.DIALOGUE,
+                            order=1,
+                            char_id="c1",
+                            source_ref=SourceRef(chapter=1, paragraph=2, quote="对白"),
+                        ),
                     ],
                 ),
             ],
@@ -478,3 +490,57 @@ class TestValidatorRunner:
         runner = ValidatorRunner(validators=[])
         report = runner.run(script)
         assert report.passed
+
+
+# ── 11.7 SourceRefCoverageValidator ──
+
+
+class TestSourceRefCoverageValidator:
+    def test_all_blocks_have_source_ref_passes(self):
+        from app.schemas.script import SourceRef
+
+        script = _make_script(
+            scenes=[
+                _make_scene(
+                    1,
+                    blocks=[
+                        _make_block(
+                            BlockType.ACTION,
+                            order=0,
+                            source_ref=SourceRef(chapter=1, paragraph=3, quote="原文引用"),
+                        ),
+                        _make_block(
+                            BlockType.DIALOGUE,
+                            order=1,
+                            char_id="c1",
+                            source_ref=SourceRef(chapter=1, paragraph=5, quote="对白原文"),
+                        ),
+                    ],
+                ),
+            ],
+        )
+        v = SourceRefCoverageValidator()
+        findings = v.validate(script)
+        assert len(findings) == 0
+
+    def test_missing_source_ref_warns(self):
+        script = _make_script(
+            scenes=[
+                _make_scene(
+                    1,
+                    blocks=[
+                        _make_block(BlockType.ACTION, order=0),
+                        _make_block(
+                            BlockType.DIALOGUE,
+                            order=1,
+                            char_id="c1",
+                        ),
+                    ],
+                ),
+            ],
+        )
+        v = SourceRefCoverageValidator()
+        findings = v.validate(script)
+        assert len(findings) == 2
+        assert all(f.severity == ValidationSeverity.WARNING for f in findings)
+        assert "source_ref" in findings[0].message

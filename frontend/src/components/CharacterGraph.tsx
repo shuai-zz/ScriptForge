@@ -3,7 +3,6 @@ import {
   ReactFlow,
   Background,
   Controls,
-  MiniMap,
   type Node,
   type Edge,
   Handle,
@@ -109,11 +108,6 @@ export default function CharacterGraph({ characters, relationships }: CharacterG
       >
         <Background color="#5c5a66" gap={20} size={1} />
         <Controls />
-        <MiniMap
-          nodeColor={(node) => ROLE_NODE_COLORS[(node.data as any)?.role_type] || "#5c5a66"}
-          maskColor="rgba(11, 11, 18, 0.8)"
-          className="bg-surface"
-        />
       </ReactFlow>
     </div>
   );

@@ -18,9 +18,9 @@ export default function App() {
       <Routes>
         <Route element={<AppLayout />}>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/providers" element={<ProviderConfig />} />
         <Route path="/projects/:projectId" element={<ChaptersPage />} />
         <Route path="/projects/:projectId/settings" element={<ProjectSettings />} />
-        <Route path="/projects/:projectId/providers" element={<ProviderConfig />} />
         <Route path="/projects/:projectId/convert" element={<PipelineProgress />} />
         <Route path="/projects/:projectId/script" element={<ScriptEditor />} />
         <Route path="/projects/:projectId/versions" element={<VersionHistory />} />
