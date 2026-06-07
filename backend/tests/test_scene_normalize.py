@@ -94,6 +94,34 @@ def test_normalize_scene_coerces_annotation_strings():
     assert out["blocks"][0]["annotation_refs"] == ["a"]
 
 
+def test_normalize_scene_coerces_source_ref():
+    """source_ref.chapter/paragraph are ints; the model writes ranges/strings."""
+    scene = {
+        "slug": {"location_type": "INT.", "location_name": "x", "time": "DAY"},
+        "blocks": [
+            {
+                "block_id": "b1",
+                "order": 0,
+                "type": "action",
+                "text": "t",
+                "source_ref": {"chapter": "第3章", "paragraph": "4-7", "quote": "原文"},
+            },
+            {
+                "block_id": "b2",
+                "order": 1,
+                "type": "action",
+                "text": "t2",
+                "source_ref": "一段乱写的字符串",  # malformed → dropped
+            },
+        ],
+    }
+    out = _normalize_scene(scene, 3, 0)
+    Scene.model_validate(out)  # must not raise
+    assert out["blocks"][0]["source_ref"]["chapter"] == 3
+    assert out["blocks"][0]["source_ref"]["paragraph"] == 4
+    assert out["blocks"][1]["source_ref"] is None
+
+
 async def test_stage_1_recovers_natural_llm_output():
     yaml_out = """```yaml
 scenes:
