@@ -310,10 +310,19 @@ export default function VersionHistory() {
                           )}
                           onClick={(e) => {
                             e.stopPropagation();
-                            setCompareVersion((prev) =>
-                              prev === v.version_id ? null : v.version_id
-                            );
-                            setDiffResult(null);
+                            if (compareVersion && compareVersion !== v.version_id) {
+                              // 已有对比基准且点击的是另一个版本，直接触发 diff
+                              handleDiff(v.version_id, compareVersion);
+                            } else {
+                              // 切换当前版本的对比状态
+                              setCompareVersion((prev) =>
+                                prev === v.version_id ? null : v.version_id
+                              );
+                              if (compareVersion === v.version_id) {
+                                // 取消对比时清空 diff
+                                setDiffResult(null);
+                              }
+                            }
                           }}
                         >
                           <ArrowLeftRight size={10} className="inline mr-0.5" />
@@ -346,6 +355,14 @@ export default function VersionHistory() {
             <div className="space-y-3">
               <Skeleton className="h-6 w-1/3" />
               <Skeleton className="h-64 w-full" />
+            </div>
+          ) : compareVersion && !diffResult ? (
+            <div className="flex h-full flex-col items-center justify-center text-muted">
+              <ArrowLeftRight size={32} className="mb-2 opacity-30" />
+              <p className="text-sm">已选择对比基准版本</p>
+              <p className="mt-1 text-xs opacity-60">
+                请点击另一个版本的「对比」按钮或卡片进行对比
+              </p>
             </div>
           ) : diffResult ? (
             <div>
