@@ -405,7 +405,13 @@ def stage_1_splitter(state: ConversionState) -> dict:
     This node exists so that quality_gate_0 has a deterministic
     target to route to on success.
     """
-    return {}
+    return {
+        "progress": {
+            "current_stage": "stage_1_splitter",
+            "percent": 25,
+            "message": "开始章节转换",
+        },
+    }
 
 
 async def stage_1_chapter(

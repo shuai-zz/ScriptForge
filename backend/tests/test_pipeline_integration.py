@@ -394,3 +394,46 @@ def test_graph_has_all_nodes():
     ]
     for node in expected:
         assert node in nodes, f"Node '{node}' not found in graph"
+
+
+@pytest.mark.asyncio
+async def test_astream_node_outputs_are_dicts(mock_llm_response, sample_chapters):
+    """Regression: a node returning {} (stage_1_splitter) makes LangGraph stream
+    None for that node, which crashed the SSE consumer with
+    "'NoneType' object has no attribute 'get'". Every streamed node output must
+    be a non-None dict so the consumer's node_output.get(...) is safe."""
+    mock_chat = mock_llm_response(STORY_BIBLE_JSON, CHAPTER_SCENE_JSON)
+    with patch(
+        "app.pipeline.nodes.create_chat_model_from_config",
+        return_value=mock_chat,
+    ):
+        state: ConversionState = {
+            "project_id": str(uuid.uuid4()),
+            "project_title": "测试项目",
+            "run_id": "test-run",
+            "chapters": sample_chapters,
+            "errors": [],
+            "chapter_scripts": {},
+            "quality_checks": {},
+            "retry_counts": {},
+            "provider_assignments": {
+                "stage_0": "test-provider",
+                "stage_1": "test-provider",
+                "stage_2": "test-provider",
+            },
+            "status": "running",
+        }
+        config = {
+            "configurable": {"thread_id": "test-run", "providers": PROVIDER_CONFIG}
+        }
+        graph = build_conversion_graph()
+
+        saw_splitter = False
+        async for event in graph.astream(state, config=config):
+            for node_name, node_output in event.items():
+                assert node_output is not None, f"node '{node_name}' streamed None"
+                assert isinstance(node_output, dict)
+                if node_name == "stage_1_splitter":
+                    saw_splitter = True
+
+        assert saw_splitter, "stage_1_splitter path was not exercised"
