@@ -811,6 +811,25 @@ def quality_gate_2(state: ConversionState) -> dict:
             )
             passed = False
 
+        # ── Chapter coverage check (P0: ensure no chapter is silently dropped) ──
+        chapters = state.get("chapters", [])
+        if chapters:
+            expected_chapter_numbers = {ch["chapter_number"] for ch in chapters}
+            covered_chapters: set[int] = set()
+            for scene in scenes:
+                for block in scene.get("blocks", []):
+                    ref = block.get("source_ref")
+                    if isinstance(ref, dict):
+                        covered_chapters.add(ref.get("chapter", 0))
+
+            missing_chapters = sorted(expected_chapter_numbers - covered_chapters)
+            if missing_chapters:
+                issues.append(
+                    f"章节内容丢失：第 {', '.join(str(c) for c in missing_chapters)} 章"
+                    f"在剧本中没有任何场景，转换可能遗漏了这些章节的关键情节。"
+                )
+                passed = False
+
         # ── Semantic validators (Group 11) ──
         try:
             script = ScriptV1.model_validate(script_dict)
