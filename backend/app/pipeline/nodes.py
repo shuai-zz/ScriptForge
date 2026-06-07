@@ -502,6 +502,16 @@ def _normalize_scene(scene: dict, chapter_number, index: int) -> dict:
                 block["type"] = (
                     "dialogue" if (block.get("line") or block.get("char_name")) else "action"
                 )
+            if "annotation_refs" in block:
+                block["annotation_refs"] = _stringify_list(block["annotation_refs"])
+    # scene.annotations is list[SceneAnnotationRef] ({annotation_id}); the model
+    # often drops a bare description string here — wrap it into a ref object.
+    anns = scene.get("annotations")
+    if isinstance(anns, list):
+        scene["annotations"] = [
+            a if isinstance(a, dict) else {"annotation_id": str(a)}
+            for a in anns
+        ]
     return scene
 
 

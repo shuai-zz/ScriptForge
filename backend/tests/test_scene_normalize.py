@@ -70,6 +70,30 @@ def test_normalize_scene_fills_required_fields():
     assert out["blocks"][1]["type"] == "dialogue"  # inferred from line/char_name
 
 
+def test_normalize_scene_coerces_annotation_strings():
+    """The model often drops a description string into scene.annotations
+    (list[SceneAnnotationRef]) and objects into block.annotation_refs (list[str])."""
+    scene = {
+        "slug": {"location_type": "INT.", "location_name": "x", "time": "DAY"},
+        "blocks": [
+            {
+                "block_id": "b1",
+                "order": 0,
+                "type": "action",
+                "text": "t",
+                "annotation_refs": [{"id": "a"}],
+            }
+        ],
+        "annotations": ["本场景对应小说第二章的物理学崩溃揭示。"],
+    }
+    out = _normalize_scene(scene, 2, 0)
+    Scene.model_validate(out)  # must not raise
+    assert out["annotations"][0] == {
+        "annotation_id": "本场景对应小说第二章的物理学崩溃揭示。"
+    }
+    assert out["blocks"][0]["annotation_refs"] == ["a"]
+
+
 async def test_stage_1_recovers_natural_llm_output():
     yaml_out = """```yaml
 scenes:
