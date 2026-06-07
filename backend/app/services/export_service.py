@@ -5,11 +5,41 @@ import uuid
 import zipfile
 from datetime import datetime
 
+import os
+import re
+
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.pdfgen import canvas
 
 from app.schemas.script import ScriptV1
+
+# Register a CJK font so Chinese characters don't render as black boxes.
+# STHeiti ships on macOS; on Linux we fall back to a system-available font.
+def _register_cjk_font() -> str:
+    candidates = [
+        ("/System/Library/Fonts/STHeiti Medium.ttc", 0),
+        ("/System/Library/Fonts/PingFang.ttc", 0),
+        ("/usr/share/fonts/truetype/wqy/wqy-zenhei.ttc", 0),
+        ("/usr/share/fonts/truetype/noto/NotoSansCJK-Regular.ttc", 0),
+    ]
+    for path, idx in candidates:
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("CJKFont", path, subfontIndex=idx))
+                return "CJKFont"
+            except Exception:
+                continue
+    return None
+
+
+_CJK_FONT = _register_cjk_font()
+
+
+def _contains_chinese(text: str) -> bool:
+    return bool(re.search(r"[\u4e00-\u9fff]", text or ""))
 
 
 class ExportService:
@@ -93,14 +123,19 @@ class ExportService:
                 c.drawRightString(width - right_margin, height - 0.5 * inch, str(page_num - 1))
             return height - top_margin
 
+        def _resolve_font(text: str, western_font: str) -> str:
+            """Use CJK font when text contains Chinese characters."""
+            return _CJK_FONT if (_CJK_FONT and _contains_chinese(text)) else western_font
+
         def _draw_wrapped_text(text: str, x: float, y: float, max_width: float, font: str, size: int) -> float:
             """Draw wrapped text, returning the new y position."""
-            c.setFont(font, size)
+            actual_font = _resolve_font(text, font)
+            c.setFont(actual_font, size)
             words = (text or "").split()
             line_words = []
             for word in words:
                 test = " ".join(line_words + [word])
-                if c.stringWidth(test, font, size) < max_width:
+                if c.stringWidth(test, actual_font, size) < max_width:
                     line_words.append(word)
                 else:
                     c.drawString(x, y, " ".join(line_words))
@@ -115,17 +150,17 @@ class ExportService:
 
         # ── Title page ──
         page_num = 1
-        c.setFont("Courier-Bold", 24)
         title_text = meta.title or "Untitled"
-        title_width = c.stringWidth(title_text, "Courier-Bold", 24)
+        c.setFont(_resolve_font(title_text, "Courier-Bold"), 24)
+        title_width = c.stringWidth(title_text, _resolve_font(title_text, "Courier-Bold"), 24)
         c.drawCentredString(width / 2, height * 0.55, title_text)
 
         if meta.subtitle:
-            c.setFont("Courier", 14)
+            c.setFont(_resolve_font(meta.subtitle, "Courier"), 14)
             c.drawCentredString(width / 2, height * 0.55 - 0.4 * inch, meta.subtitle)
 
-        c.setFont("Courier", 12)
         author_text = f"by {meta.source_author or 'Unknown'}"
+        c.setFont(_resolve_font(author_text, "Courier"), 12)
         c.drawCentredString(width / 2, height * 0.55 - 1.0 * inch, author_text)
 
         c.setFont("Courier", 10)
@@ -167,7 +202,7 @@ class ExportService:
                 c.drawString(0.4 * inch, y, str(scene.scene_number))
 
             # Scene slug
-            c.setFont("Courier-Bold", 12)
+            c.setFont(_resolve_font(slug_text, "Courier-Bold"), 12)
             c.drawString(left_margin, y, slug_text)
             y -= 0.3 * inch
 
@@ -190,7 +225,7 @@ class ExportService:
                     if current_scene_number is not None:
                         c.setFont("Courier", 8)
                         c.drawString(0.4 * inch, y, str(current_scene_number))
-                    c.setFont("Courier-Bold", 12)
+                    c.setFont(_resolve_font(slug_text, "Courier-Bold"), 12)
                     c.drawString(left_margin, y, slug_text)
                     y -= 0.2 * inch
                     c.setFont("Courier", 10)
@@ -208,7 +243,7 @@ class ExportService:
                     line = block.line or ""
                     parenthetical = block.parenthetical
 
-                    c.setFont("Courier-Bold", 12)
+                    c.setFont(_resolve_font(char_name, "Courier-Bold"), 12)
                     name_x = left_margin + 2 * inch
                     c.drawString(name_x, y, char_name.upper())
                     y -= 0.2 * inch
@@ -220,7 +255,7 @@ class ExportService:
                         scene_continued = True
 
                     if parenthetical:
-                        c.setFont("Courier", 12)
+                        c.setFont(_resolve_font(parenthetical, "Courier"), 12)
                         paren_x = left_margin + 1.5 * inch
                         c.drawString(paren_x, y, f"({parenthetical})")
                         y -= 0.2 * inch

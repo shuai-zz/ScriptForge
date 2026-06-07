@@ -39,3 +39,8 @@ AGENTS.md
 
 # Logs
 *.log
+
+# Media (generated)
+*.mp4
+*.webm
+*.mov

@@ -52,6 +52,10 @@ ScriptForge 是一款面向编剧、小说作者和影视内容创作者的 AI �
 
 ---
 
+## 🎥 视频演示
+
+📺 [Bilibili：ScriptForge 项目介绍与功能演示](https://www.bilibili.com/video/BV1DQEx6MEMm/?vd_source=a7cd440f3d6b387634e694fc865d9e24)
+
 ## 🏗 技术栈
 
 | 层 | 技术 |
@@ -84,6 +88,7 @@ ScriptForge 是一款面向编剧、小说作者和影视内容创作者的 AI �
 │   │   └── schemas/         # Pydantic 模型
 │   ├── tests/               # pytest 测试
 │   └── alembic/             # 数据库迁移
+├── landing/           # GitHub Pages 项目介绍页
 ├── docs/              # 文档
 │   └── yaml-schema-guide.md # YAML Schema 设计指南
 ├── openspec/          # OpenSpec 需求规格
@@ -156,7 +161,8 @@ npx playwright test --project=chromium
 ## 📖 相关文档
 
 - [YAML Schema 设计指南](docs/yaml-schema-guide.md)
-- [OpenSpec 需求与任务](openspec/changes/script-forge-app/)
+- [OpenSpec 归档规格](openspec/changes/archive/2026-06-06-script-forge-app/)
+- [GitHub Pages 项目介绍](https://shuai-zz.github.io/ScriptForge/)
 
 ---
 
