@@ -481,3 +481,5 @@ async def test_full_pipeline_produces_script(mock_llm_response, sample_chapters)
     script = (snapshot.values or {}).get("assembled_script")
     assert script is not None, "no assembled_script — stage_1 produced no scenes"
     assert len(script.get("scenes", [])) >= 1
+    # characters carried over from the Story Bible network
+    assert len(script.get("characters", [])) >= 1
