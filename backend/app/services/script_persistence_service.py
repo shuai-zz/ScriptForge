@@ -280,9 +280,7 @@ class ScriptPersistenceService:
                     char_id=db_char_id,
                     char_name=block.char_name,
                     parenthetical=block.parenthetical,
-                    annotation_refs=[
-                        ref.annotation_id for ref in (block.annotation_refs or [])
-                    ],
+                    annotation_refs=list(block.annotation_refs or []),
                     source_ref=(
                         block.source_ref.model_dump(mode="json")
                         if block.source_ref
