@@ -176,6 +176,40 @@ async def test_get_script_not_found(async_client, async_project):
     assert r.status_code == 404
 
 
+async def test_update_script_persists_to_db_rows(async_client, async_project):
+    script = _script_with_content()
+    r = await async_client.put(
+        f"/api/projects/{async_project.id}/script",
+        json=script.model_dump(mode="json"),
+    )
+    assert r.status_code == 200
+    data = r.json()
+    assert data["metadata"]["title"] == "DB Row Script"
+    assert len(data["scenes"]) == 1
+    assert data["scenes"][0]["blocks"][1]["line"] == "Hi."
+
+    # A subsequent GET returns the same DB-backed script.
+    r2 = await async_client.get(f"/api/projects/{async_project.id}/script")
+    assert r2.status_code == 200
+    assert r2.json()["metadata"]["title"] == "DB Row Script"
+
+
+async def test_update_script_project_not_found(async_client):
+    r = await async_client.put(
+        f"/api/projects/{uuid.uuid4()}/script",
+        json=_valid_script().model_dump(mode="json"),
+    )
+    assert r.status_code == 404
+
+
+async def test_update_script_invalid_payload(async_client, async_project):
+    r = await async_client.put(
+        f"/api/projects/{async_project.id}/script",
+        json={"foo": "bar"},  # missing required ScriptV1 fields
+    )
+    assert r.status_code == 422
+
+
 # ── _persist_script helper ──
 
 
