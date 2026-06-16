@@ -2,18 +2,17 @@
 
 import uuid
 
+import yaml
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.schemas.script import ScriptV1
 from app.schemas.version import (
     CheckpointCreate,
-    CheckpointResponse,
-    VersionDiffResponse,
-    VersionListResponse,
     VersionRestoreRequest,
-    VersionRestoreResponse,
 )
+from app.services.script_persistence_service import ScriptPersistenceService
 from app.services.version_service import VersionService, VersionServiceError
 
 router = APIRouter(prefix="/api/projects/{project_id}/versions", tags=["versions"])
@@ -86,13 +85,27 @@ async def restore_version(
     data: VersionRestoreRequest,
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Restore script to a specific version."""
+    """Restore script to a specific version and sync DB rows."""
     try:
-        return await VersionService.restore(project_id, data.version_id)
+        result = await VersionService.restore(project_id, data.version_id)
     except VersionServiceError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Restore failed: {e}")
+
+    # Keep the normalized DB rows in sync with the restored YAML.
+    yaml_content = await VersionService.read_script(project_id)
+    if yaml_content:
+        try:
+            script = ScriptV1.model_validate(yaml.safe_load(yaml_content))
+            await ScriptPersistenceService.persist_script(db, project_id, script)
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Restored file but failed to sync DB rows: {e}",
+            ) from e
+
+    return result
 
 
 @router.get("/has-changes", response_model=dict)
