@@ -102,6 +102,8 @@ async def test_persist_creates_new_row():
     db = MagicMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
     db.execute = AsyncMock(return_value=_exec_result(scalar_one=None))
 
     with patch(
@@ -110,8 +112,9 @@ async def test_persist_creates_new_row():
     ):
         await _persist_script(project_id, graph, MagicMock())
 
-    db.add.assert_called_once()
-    added = db.add.call_args.args[0]
+    # The first add is the script metadata row.
+    assert db.add.call_count >= 1
+    added = db.add.call_args_list[0].args[0]
     assert added.project_id == project_id
     assert "测试剧本" in added.yaml_content
     db.commit.assert_awaited_once()
@@ -124,6 +127,8 @@ async def test_persist_updates_existing_row():
     db = MagicMock()
     db.add = MagicMock()
     db.commit = AsyncMock()
+    db.flush = AsyncMock()
+    db.refresh = AsyncMock()
     db.execute = AsyncMock(return_value=_exec_result(scalar_one=existing))
 
     with patch(
