@@ -44,3 +44,16 @@ AGENTS.md
 *.mp4
 *.webm
 *.mov
+
+# Roadshow / Design artifacts
+roadshow-deck.pptx
+wb-check.png
+diagrams/
+lark-boards/
+scripts/
+
+# Docs (temporary)
+docs/roadshow-interview-qa.md
+
+# PPT workspace (source lives in landing/index.html)
+ppt/
