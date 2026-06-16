@@ -155,7 +155,8 @@ async def test_persist_script_replaces_previous_scenes_and_blocks(db, project):
     script = _make_script()
     await ScriptPersistenceService.persist_script(db, project.id, script)
 
-    # Second run with fewer scenes/blocks and updated character aliases
+    # Second run with fewer scenes/blocks and updated character aliases.
+    # The conversion pipeline opts in to stale-character cleanup.
     script2 = ScriptV1(
         metadata=ScriptMetadata(title="Test Script 2"),
         characters=[
@@ -190,7 +191,9 @@ async def test_persist_script_replaces_previous_scenes_and_blocks(db, project):
             )
         ],
     )
-    await ScriptPersistenceService.persist_script(db, project.id, script2)
+    await ScriptPersistenceService.persist_script(
+        db, project.id, script2, delete_missing_characters=True
+    )
 
     result = await db.execute(
         select(Script).where(Script.project_id == project.id)
@@ -218,3 +221,30 @@ async def test_persist_script_replaces_previous_scenes_and_blocks(db, project):
     assert len(chars) == 1
     assert chars[0].aliases == ["A", "Alicia"]
     assert chars[0].traits == ["brave", "smart"]
+
+
+async def test_persist_script_keeps_missing_characters_by_default(db, project):
+    script = _make_script()
+    await ScriptPersistenceService.persist_script(db, project.id, script)
+
+    script2 = ScriptV1(
+        metadata=ScriptMetadata(title="Test Script 2"),
+        characters=[
+            ScriptCharacter(
+                character_id="char_001",
+                name="Alice",
+                role_type=RoleType.PROTAGONIST,
+                aliases=["A"],
+                traits=["brave"],
+            ),
+        ],
+        scenes=[],
+    )
+    await ScriptPersistenceService.persist_script(db, project.id, script2)
+
+    chars = (
+        await db.execute(
+            select(Character).where(Character.project_id == project.id)
+        )
+    ).scalars().all()
+    assert len(chars) == 2

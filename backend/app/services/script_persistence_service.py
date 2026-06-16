@@ -182,11 +182,17 @@ class ScriptPersistenceService:
         db: AsyncSession,
         project_id: uuid.UUID,
         script: ScriptV1,
+        delete_missing_characters: bool = False,
     ) -> Script:
         """Persist ``script`` into ``scripts``, ``scenes``, ``blocks`` tables.
 
         Characters are upserted by name and mapped to their database IDs so that
         ``char_id`` references inside scenes/blocks remain valid.
+
+        By default characters that are not present in ``script`` are left alone
+        so that manually-created characters are not accidentally deleted. Pass
+        ``delete_missing_characters=True`` to remove stale characters (used by
+        the conversion pipeline where the script is the authoritative snapshot).
         """
         # 1) Upsert the script metadata row.
         result = await db.execute(
@@ -222,13 +228,14 @@ class ScriptPersistenceService:
             )
             char_id_map[script_char.character_id] = char.id
 
-        # Remove characters that are no longer in the script snapshot.
-        await db.execute(
-            delete(Character).where(
-                Character.project_id == project_id,
-                Character.name.not_in(script_char_names),
+        # Optionally remove characters that are no longer in the script snapshot.
+        if delete_missing_characters:
+            await db.execute(
+                delete(Character).where(
+                    Character.project_id == project_id,
+                    Character.name.not_in(script_char_names),
+                )
             )
-        )
 
         # 3) Replace existing scenes/blocks for this script.
         await db.execute(

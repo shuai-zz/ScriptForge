@@ -4,7 +4,6 @@ import json
 import logging
 import uuid
 
-import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.runnables import RunnableConfig
@@ -15,7 +14,6 @@ from app.database import async_session_factory
 from app.models.chapter import Chapter
 from app.models.conversion import ConversionRun, LLMProvider
 from app.models.project import Project
-from app.models.script import Script
 from app.models.story_bible import StoryBible
 from app.pipeline.graph import build_conversion_graph
 from app.pipeline.state import ConversionState
@@ -442,7 +440,9 @@ async def _persist_script(
             return
         script = ScriptV1.model_validate(assembled)
         async with async_session_factory() as db:
-            await ScriptPersistenceService.persist_script(db, project_id, script)
+            await ScriptPersistenceService.persist_script(
+                db, project_id, script, delete_missing_characters=True
+            )
     except Exception:
         logger.exception("Failed to persist script for project %s", project_id)
 
