@@ -1,15 +1,21 @@
-"""Tests for script export endpoints."""
+"""Tests for script export endpoints using DB rows as source of truth."""
 
 import io
 import uuid
 import zipfile
-from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from fastapi.testclient import TestClient
+import pytest_asyncio
+import yaml
+from httpx import ASGITransport, AsyncClient
 
-from app.database import get_db
+from app.database import async_session_factory, get_db
 from app.main import app
+from app.models.project import Project
+from app.schemas.script import ScriptV1
+from app.services.script_persistence_service import ScriptPersistenceService
+
+pytestmark = pytest.mark.asyncio(loop_scope="session")
 
 
 DEMO_YAML = """schema_version: "1.0"
@@ -109,51 +115,62 @@ global_annotations: []
 """
 
 
-def _make_mock_script():
-    script = MagicMock()
-    script.yaml_content = DEMO_YAML
-    return script
+@pytest_asyncio.fixture(scope="session", loop_scope="session")
+async def async_db():
+    async with async_session_factory() as session:
+        yield session
 
 
-@pytest.fixture
-def mock_db():
-    db = MagicMock()
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def async_project(async_db):
+    p = Project(name=f"export-test-{uuid.uuid4().hex[:8]}")
+    async_db.add(p)
+    await async_db.commit()
+    await async_db.refresh(p)
+    yield p
+    refreshed = await async_db.get(Project, p.id)
+    if refreshed:
+        await async_db.delete(refreshed)
+        await async_db.commit()
 
-    async def _execute(stmt):
-        result = MagicMock()
-        result.scalar_one_or_none = MagicMock(return_value=_make_mock_script())
-        return result
 
-    db.execute = _execute
-    return db
-
-
-@pytest.fixture
-def client(mock_db):
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def async_client():
     async def override_get_db():
-        yield mock_db
+        async with async_session_factory() as session:
+            yield session
 
     app.dependency_overrides[get_db] = override_get_db
-    with TestClient(app) as tc:
-        yield tc
+    async with AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        yield client
     app.dependency_overrides.clear()
 
 
-@pytest.fixture
-def demo_project_id() -> str:
-    return "123e4567-e89b-12d3-a456-426614174000"
+@pytest_asyncio.fixture(scope="function", loop_scope="session")
+async def demo_project_with_script(async_project, async_db):
+    script = ScriptV1.model_validate(yaml.safe_load(DEMO_YAML))
+    await ScriptPersistenceService.persist_script(
+        async_db, async_project.id, script
+    )
+    return async_project
 
 
 class TestExportEndpoints:
-    def test_export_yaml(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.get(f"/api/projects/{demo_project_id}/export/yaml")
+    async def test_export_yaml(self, async_client, demo_project_with_script):
+        resp = await async_client.get(
+            f"/api/projects/{demo_project_with_script.id}/export/yaml"
+        )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/x-yaml"
         assert "三体" in resp.text
         assert "schema_version" in resp.text
 
-    def test_export_fountain(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.get(f"/api/projects/{demo_project_id}/export/fountain")
+    async def test_export_fountain(self, async_client, demo_project_with_script):
+        resp = await async_client.get(
+            f"/api/projects/{demo_project_with_script.id}/export/fountain"
+        )
         assert resp.status_code == 200
         assert "text/plain" in resp.headers["content-type"]
         body = resp.text
@@ -161,24 +178,28 @@ class TestExportEndpoints:
         assert "INT. 汪淼家 - 客厅 - NIGHT" in body
         assert "汪淼" in body
 
-    def test_export_pdf(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.get(f"/api/projects/{demo_project_id}/export/pdf")
+    async def test_export_pdf(self, async_client, demo_project_with_script):
+        resp = await async_client.get(
+            f"/api/projects/{demo_project_with_script.id}/export/pdf"
+        )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/pdf"
         # PDF starts with %PDF-
         assert resp.content[:5] == b"%PDF-"
 
-    def test_export_fdx(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.get(f"/api/projects/{demo_project_id}/export/fdx")
+    async def test_export_fdx(self, async_client, demo_project_with_script):
+        resp = await async_client.get(
+            f"/api/projects/{demo_project_with_script.id}/export/fdx"
+        )
         assert resp.status_code == 200
         assert resp.headers["content-type"] == "application/xml"
         body = resp.text
         assert "FinalDraft" in body
         assert "汪淼" in body
 
-    def test_export_batch_zip(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.post(
-            f"/api/projects/{demo_project_id}/export/batch",
+    async def test_export_batch_zip(self, async_client, demo_project_with_script):
+        resp = await async_client.post(
+            f"/api/projects/{demo_project_with_script.id}/export/batch",
             json={"formats": ["yaml", "fountain", "pdf", "fdx"]},
         )
         assert resp.status_code == 200
@@ -192,12 +213,16 @@ class TestExportEndpoints:
             assert any(n.endswith(".pdf") for n in names)
             assert any(n.endswith(".fdx") for n in names)
 
-    def test_export_batch_single_format(self, client: TestClient, demo_project_id: str) -> None:
-        resp = client.post(
-            f"/api/projects/{demo_project_id}/export/batch",
+    async def test_export_batch_single_format(
+        self, async_client, demo_project_with_script
+    ):
+        resp = await async_client.post(
+            f"/api/projects/{demo_project_with_script.id}/export/batch",
             json={"formats": ["yaml"]},
         )
         assert resp.status_code == 200
+        assert resp.headers["content-type"] == "application/zip"
+
         buf = io.BytesIO(resp.content)
         with zipfile.ZipFile(buf, "r") as zf:
             names = zf.namelist()
@@ -206,30 +231,8 @@ class TestExportEndpoints:
 
 
 class TestExportNotFound:
-    """When project has no script."""
-
-    @pytest.fixture
-    def empty_db(self):
-        db = MagicMock()
-
-        async def _execute(stmt):
-            result = MagicMock()
-            result.scalar_one_or_none = MagicMock(return_value=None)
-            return result
-
-        db.execute = _execute
-        return db
-
-    @pytest.fixture
-    def empty_client(self, empty_db):
-        async def override_get_db():
-            yield empty_db
-
-        app.dependency_overrides[get_db] = override_get_db
-        with TestClient(app) as tc:
-            yield tc
-        app.dependency_overrides.clear()
-
-    def test_export_yaml_not_found(self, empty_client: TestClient, demo_project_id: str) -> None:
-        resp = empty_client.get(f"/api/projects/{demo_project_id}/export/yaml")
+    async def test_export_missing_project(self, async_client):
+        resp = await async_client.get(
+            f"/api/projects/{uuid.uuid4()}/export/yaml"
+        )
         assert resp.status_code == 404
