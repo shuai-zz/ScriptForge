@@ -8,12 +8,23 @@ compatibility, but scenes/blocks/characters are also stored as relational rows.
 import uuid
 
 import yaml
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.character import Character
 from app.models.script import Block, Scene, Script
-from app.schemas.script import ScriptV1
+from app.schemas.script import (
+    Scene as SceneSchema,
+)
+from app.schemas.script import (
+    SceneIndexEntry,
+    ScriptBlock,
+    ScriptCharacter,
+    ScriptMetadata,
+    ScriptV1,
+    Slug,
+    SourceRef,
+)
 
 
 class ScriptPersistenceService:
@@ -49,6 +60,122 @@ class ScriptPersistenceService:
         await db.flush()
         await db.refresh(char)
         return char
+
+    @staticmethod
+    async def load_script(
+        db: AsyncSession,
+        project_id: uuid.UUID,
+    ) -> ScriptV1 | None:
+        """Reconstruct a ScriptV1 from DB rows, falling back to YAML.
+
+        Returns ``None`` when no script row exists. If scenes have not been
+        normalized yet, the legacy ``yaml_content`` field is parsed instead.
+        """
+        result = await db.execute(
+            select(Script).where(Script.project_id == project_id)
+        )
+        script_row = result.scalar_one_or_none()
+        if script_row is None:
+            return None
+
+        scene_count = await db.scalar(
+            select(func.count(Scene.id)).where(Scene.script_id == script_row.id)
+        )
+        if not scene_count:
+            if not script_row.yaml_content:
+                return None
+            return ScriptV1.model_validate(yaml.safe_load(script_row.yaml_content))
+
+        char_result = await db.execute(
+            select(Character).where(Character.project_id == project_id)
+        )
+        chars = {str(char.id): char for char in char_result.scalars().all()}
+
+        def _char_name(char_id: str | None) -> str | None:
+            return chars[char_id].name if char_id and char_id in chars else None
+
+        script_characters = [
+            ScriptCharacter(
+                character_id=char_id,
+                name=char.name,
+                role_type=char.role_type,
+                aliases=list(char.aliases or []),
+                traits=list(char.traits or []),
+            )
+            for char_id, char in chars.items()
+        ]
+
+        scene_result = await db.execute(
+            select(Scene).where(Scene.script_id == script_row.id).order_by(Scene.order)
+        )
+        scenes: list[SceneSchema] = []
+        scene_index: list[SceneIndexEntry] = []
+        for scene_row in scene_result.scalars().all():
+            block_result = await db.execute(
+                select(Block)
+                .where(Block.scene_id == scene_row.id)
+                .order_by(Block.order)
+            )
+            blocks: list[ScriptBlock] = []
+            for block_row in block_result.scalars().all():
+                block = ScriptBlock(
+                    block_id=str(block_row.id),
+                    order=block_row.order,
+                    type=block_row.type,
+                    text=block_row.text,
+                    line=block_row.line,
+                    char_id=str(block_row.char_id) if block_row.char_id else None,
+                    char_name=block_row.char_name or _char_name(block_row.char_id),
+                    parenthetical=block_row.parenthetical,
+                    annotation_refs=list(block_row.annotation_refs or []),
+                    source_ref=(
+                        SourceRef(**block_row.source_ref)
+                        if block_row.source_ref
+                        else None
+                    ),
+                )
+                blocks.append(block)
+
+            scene_id = str(scene_row.id)
+            scene = SceneSchema(
+                scene_id=scene_id,
+                scene_number=scene_row.scene_number,
+                slug=Slug(
+                    location_type=scene_row.location_type,
+                    location_name=scene_row.location_name,
+                    time=scene_row.time,
+                ),
+                summary=scene_row.summary,
+                characters_present=list(scene_row.characters_present or []),
+                props=list(scene_row.props or []),
+                blocks=blocks,
+            )
+            scenes.append(scene)
+            scene_index.append(
+                SceneIndexEntry(
+                    scene_id=scene_id,
+                    scene_number=scene_row.scene_number,
+                    slug_line=(
+                        f"{scene_row.location_type} {scene_row.location_name}"
+                        f" - {scene_row.time}"
+                    ),
+                    summary=scene_row.summary,
+                    characters=[
+                        _char_name(cid) for cid in (scene_row.characters_present or [])
+                    ],
+                )
+            )
+
+        metadata_dict = dict(script_row.script_metadata)
+        metadata_dict["total_scenes"] = len(scenes)
+        metadata = ScriptMetadata(**metadata_dict)
+        return ScriptV1(
+            schema_version=script_row.version or "1.0",
+            metadata=metadata,
+            characters=script_characters,
+            scenes=scenes,
+            scene_index=scene_index,
+        )
 
     @staticmethod
     async def persist_script(
