@@ -1,18 +1,17 @@
 """Script retrieval endpoint.
 
-Returns the latest generated screenplay (ScriptV1 JSON) for a project, parsed
-from the persisted YAML in the ``scripts`` table.
+Returns the latest generated screenplay (ScriptV1 JSON) for a project,
+reconstructed from normalized DB rows when available, otherwise falling back
+to the persisted YAML snapshot.
 """
 
 import uuid
 
-import yaml
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.script import Script
+from app.services.script_persistence_service import ScriptPersistenceService
 
 router = APIRouter(prefix="/api/projects/{project_id}/script", tags=["script"])
 
@@ -26,13 +25,7 @@ async def get_script(
 
     404 if no script has been generated yet (the project hasn't been converted).
     """
-    result = await db.execute(
-        select(Script).where(Script.project_id == project_id)
-    )
-    script = result.scalar_one_or_none()
-    if not script or not script.yaml_content:
+    script = await ScriptPersistenceService.load_script(db, project_id)
+    if script is None:
         raise HTTPException(status_code=404, detail="尚未生成剧本")
-    try:
-        return yaml.safe_load(script.yaml_content)
-    except Exception:
-        raise HTTPException(status_code=500, detail="剧本数据解析失败")
+    return script.model_dump(mode="json")
