@@ -11,7 +11,7 @@ from app.database import Base
 
 
 class Script(Base):
-    """A generated screenplay for a project."""
+    """A generated screenplay for a project (normalized into scenes/blocks)."""
 
     __tablename__ = "scripts"
 
@@ -21,7 +21,6 @@ class Script(Base):
         unique=True,
     )
     version: Mapped[str] = mapped_column(String(50), default="1.0")
-    yaml_content: Mapped[str] = mapped_column(Text)
     script_metadata: Mapped[dict | None] = mapped_column("metadata", JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

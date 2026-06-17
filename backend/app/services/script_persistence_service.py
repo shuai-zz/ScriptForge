@@ -1,13 +1,11 @@
 """Persist a ScriptV1 into normalized database tables.
 
-This is the first phase of moving from static YAML storage to DB-as-source-of-truth.
-For now the YAML string is still written to ``scripts.yaml_content`` for backward
-compatibility, but scenes/blocks/characters are also stored as relational rows.
+The database is now the source of truth for scripts: scenes, blocks and
+characters are stored as relational rows and reconstructed on read.
 """
 
 import uuid
 
-import yaml
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -66,10 +64,10 @@ class ScriptPersistenceService:
         db: AsyncSession,
         project_id: uuid.UUID,
     ) -> ScriptV1 | None:
-        """Reconstruct a ScriptV1 from DB rows, falling back to YAML.
+        """Reconstruct a ScriptV1 from normalized DB rows.
 
-        Returns ``None`` when no script row exists. If scenes have not been
-        normalized yet, the legacy ``yaml_content`` field is parsed instead.
+        Returns ``None`` when no script row exists or when the script has no
+        scenes (e.g. it has not been persisted from a conversion/save yet).
         """
         result = await db.execute(
             select(Script).where(Script.project_id == project_id)
@@ -82,9 +80,7 @@ class ScriptPersistenceService:
             select(func.count(Scene.id)).where(Scene.script_id == script_row.id)
         )
         if not scene_count:
-            if not script_row.yaml_content:
-                return None
-            return ScriptV1.model_validate(yaml.safe_load(script_row.yaml_content))
+            return None
 
         char_result = await db.execute(
             select(Character).where(Character.project_id == project_id)
@@ -202,7 +198,6 @@ class ScriptPersistenceService:
         if script_row is None:
             script_row = Script(
                 project_id=project_id,
-                yaml_content="",
                 script_metadata={},
             )
             db.add(script_row)
@@ -211,12 +206,6 @@ class ScriptPersistenceService:
         script_row.version = script.schema_version or "1.0"
         script_row.script_metadata = (
             script.metadata.model_dump(mode="json") if script.metadata else {}
-        )
-        script_row.yaml_content = yaml.safe_dump(
-            script.model_dump(mode="json"),
-            allow_unicode=True,
-            sort_keys=False,
-            default_flow_style=False,
         )
 
         # 2) Upsert characters and build an ID map.

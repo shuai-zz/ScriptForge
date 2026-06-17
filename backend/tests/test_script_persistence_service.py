@@ -115,8 +115,6 @@ async def test_persist_script_creates_rows(db, project):
     script_row = result.scalar_one()
     assert script_row.version == "1.0"
     assert script_row.script_metadata["title"] == "Test Script"
-    assert script_row.yaml_content
-    assert "Test Script" in script_row.yaml_content
 
     # Characters upserted by name
     result = await db.execute(

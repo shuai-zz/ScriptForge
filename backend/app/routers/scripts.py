@@ -1,9 +1,7 @@
 """Script retrieval and update endpoints.
 
-Returns the latest generated screenplay (ScriptV1 JSON) for a project,
-reconstructed from normalized DB rows when available, otherwise falling back
-to the persisted YAML snapshot. Updates replace the existing script snapshot
-with the provided ScriptV1 and persist it to both DB rows and YAML.
+Returns or replaces the latest generated screenplay (ScriptV1 JSON) for a
+project, using normalized scenes/blocks/characters rows as the source of truth.
 """
 
 import uuid
@@ -43,8 +41,7 @@ async def update_script(
 ) -> dict:
     """Replace the project's script with the provided ScriptV1.
 
-    The payload is validated, persisted to scenes/blocks/characters rows, and
-    also serialized back to ``scripts.yaml_content`` for compatibility.
+    The payload is validated and persisted to scenes/blocks/characters rows.
     """
     result = await db.execute(select(Project).where(Project.id == project_id))
     if result.scalar_one_or_none() is None:
