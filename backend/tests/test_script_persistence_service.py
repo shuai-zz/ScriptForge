@@ -7,9 +7,17 @@ import pytest_asyncio
 from sqlalchemy import select
 
 from app.database import async_session_factory
+from app.models.annotation import Annotation
 from app.models.character import Character
 from app.models.project import Project
 from app.models.script import Block, Scene, Script
+from app.schemas.annotation import (
+    Alternative,
+    AnnotationCategory,
+    AnnotationV1,
+    Severity,
+    TargetReference,
+)
 from app.schemas.script import (
     BlockType,
     LocationType,
@@ -246,3 +254,104 @@ async def test_persist_script_keeps_missing_characters_by_default(db, project):
         )
     ).scalars().all()
     assert len(chars) == 2
+
+
+async def test_persist_script_replace_annotations_translates_target_ids(
+    db, project
+):
+    script = _make_script()
+    script.annotations = [
+        AnnotationV1(
+            annotation_id="ann-block-001",
+            severity=Severity.SUGGESTION,
+            category=AnnotationCategory.INNER_TO_VISUAL,
+            title="内心独白外化",
+            description="建议把内心独白改为动作呈现。",
+            confidence=0.85,
+            target_reference=TargetReference(
+                type="block", scene_id="scene_1", block_id="b1"
+            ),
+            alternatives=[
+                Alternative(
+                    alternative_id="alt-001",
+                    text="保留独白",
+                    pros="忠实原著",
+                    cons="削弱悬疑",
+                )
+            ],
+        ),
+        AnnotationV1(
+            annotation_id="ann-global-001",
+            severity=Severity.WARNING,
+            category=AnnotationCategory.PACING_SUGGESTION,
+            title="节奏建议",
+            description="前两场景都是室内夜戏，节奏偏慢。",
+            confidence=0.78,
+            target_reference=TargetReference(type="global"),
+        ),
+    ]
+
+    await ScriptPersistenceService.persist_script(
+        db, project.id, script, replace_annotations=True
+    )
+
+    anns = (
+        await db.execute(
+            select(Annotation).where(Annotation.project_id == project.id)
+        )
+    ).scalars().all()
+    assert len(anns) == 2
+
+    by_id = {a.annotation_id: a for a in anns}
+    block_ann = by_id["ann-block-001"]
+    assert block_ann.severity == "suggestion"
+    assert block_ann.category == "inner_to_visual"
+    assert block_ann.target_reference["type"] == "block"
+    # Client IDs must have been translated to DB UUIDs.
+    assert block_ann.target_reference["scene_id"] != "scene_1"
+    assert block_ann.target_reference["block_id"] != "b1"
+    assert len(block_ann.alternatives) == 1
+
+    global_ann = by_id["ann-global-001"]
+    assert global_ann.target_reference["type"] == "global"
+
+
+async def test_persist_script_replace_annotations_deletes_old_ones(db, project):
+    script = _make_script()
+    script.annotations = [
+        AnnotationV1(
+            annotation_id="ann-old",
+            severity=Severity.INFO,
+            category=AnnotationCategory.ADAPTATION_DECISION,
+            title="Old",
+            description="Old annotation.",
+            confidence=0.5,
+            target_reference=TargetReference(type="global"),
+        )
+    ]
+    await ScriptPersistenceService.persist_script(
+        db, project.id, script, replace_annotations=True
+    )
+
+    script.annotations = [
+        AnnotationV1(
+            annotation_id="ann-new",
+            severity=Severity.INFO,
+            category=AnnotationCategory.ADAPTATION_DECISION,
+            title="New",
+            description="New annotation.",
+            confidence=0.6,
+            target_reference=TargetReference(type="global"),
+        )
+    ]
+    await ScriptPersistenceService.persist_script(
+        db, project.id, script, replace_annotations=True
+    )
+
+    anns = (
+        await db.execute(
+            select(Annotation).where(Annotation.project_id == project.id)
+        )
+    ).scalars().all()
+    assert len(anns) == 1
+    assert anns[0].annotation_id == "ann-new"

@@ -9,6 +9,7 @@ import uuid
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.annotation import Annotation
 from app.models.character import Character
 from app.models.script import Block, Scene, Script
 from app.schemas.script import (
@@ -179,6 +180,7 @@ class ScriptPersistenceService:
         project_id: uuid.UUID,
         script: ScriptV1,
         delete_missing_characters: bool = False,
+        replace_annotations: bool = False,
     ) -> Script:
         """Persist ``script`` into ``scripts``, ``scenes``, ``blocks`` tables.
 
@@ -189,6 +191,10 @@ class ScriptPersistenceService:
         so that manually-created characters are not accidentally deleted. Pass
         ``delete_missing_characters=True`` to remove stale characters (used by
         the conversion pipeline where the script is the authoritative snapshot).
+
+        When ``replace_annotations=True`` the existing project annotations are
+        deleted and recreated from ``script.annotations``. The target IDs inside
+        each annotation are translated to the newly created DB UUIDs.
         """
         # 1) Upsert the script metadata row.
         result = await db.execute(
@@ -236,7 +242,9 @@ class ScriptPersistenceService:
         )
         await db.execute(delete(Scene).where(Scene.script_id == script_row.id))
 
-        # 4) Insert new scenes and blocks.
+        # 4) Insert new scenes and blocks, keeping client-id -> DB-id maps.
+        scene_id_map: dict[str, uuid.UUID] = {}
+        block_id_map: dict[str, uuid.UUID] = {}
         for scene_idx, scene in enumerate(script.scenes):
             scene_row = Scene(
                 script_id=script_row.id,
@@ -255,6 +263,7 @@ class ScriptPersistenceService:
             )
             db.add(scene_row)
             await db.flush()
+            scene_id_map[scene.scene_id] = scene_row.id
 
             for block_idx, block in enumerate(scene.blocks):
                 db_char_id = (
@@ -277,6 +286,50 @@ class ScriptPersistenceService:
                     ),
                 )
                 db.add(block_row)
+                await db.flush()
+                block_id_map[block.block_id] = block_row.id
+
+        # 5) Optionally replace annotations and translate target IDs to DB UUIDs.
+        if replace_annotations:
+            await db.execute(
+                delete(Annotation).where(Annotation.project_id == project_id)
+            )
+            for ann in script.annotations:
+                target = ann.target_reference.model_dump(mode="json")
+                if target.get("type") == "scene":
+                    client_scene_id = target.get("scene_id")
+                    if client_scene_id in scene_id_map:
+                        target["scene_id"] = str(scene_id_map[client_scene_id])
+                elif target.get("type") == "block":
+                    client_scene_id = target.get("scene_id")
+                    client_block_id = target.get("block_id")
+                    if client_scene_id in scene_id_map:
+                        target["scene_id"] = str(scene_id_map[client_scene_id])
+                    if client_block_id in block_id_map:
+                        target["block_id"] = str(block_id_map[client_block_id])
+                elif target.get("type") == "character":
+                    client_char_id = target.get("character_id")
+                    if client_char_id in char_id_map:
+                        target["character_id"] = str(char_id_map[client_char_id])
+
+                db.add(
+                    Annotation(
+                        project_id=project_id,
+                        annotation_id=ann.annotation_id,
+                        severity=ann.severity.value,
+                        category=ann.category.value,
+                        title=ann.title,
+                        description=ann.description,
+                        source_quote=ann.source_quote,
+                        target_reference=target,
+                        alternatives=[
+                            alt.model_dump(mode="json")
+                            for alt in (ann.alternatives or [])
+                        ],
+                        confidence=ann.confidence,
+                        auto_applied=ann.auto_applied,
+                    )
+                )
 
         await db.commit()
         await db.refresh(script_row)

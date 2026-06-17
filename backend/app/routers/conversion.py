@@ -441,7 +441,11 @@ async def _persist_script(
         script = ScriptV1.model_validate(assembled)
         async with async_session_factory() as db:
             await ScriptPersistenceService.persist_script(
-                db, project_id, script, delete_missing_characters=True
+                db,
+                project_id,
+                script,
+                delete_missing_characters=True,
+                replace_annotations=True,
             )
     except Exception:
         logger.exception("Failed to persist script for project %s", project_id)

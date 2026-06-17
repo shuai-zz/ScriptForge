@@ -34,6 +34,7 @@ class Annotation(Base):
     category: Mapped[str] = mapped_column(String(50))
     title: Mapped[str] = mapped_column(String(255))
     description: Mapped[str] = mapped_column(Text)
+    source_quote: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_reference: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     alternatives: Mapped[list[dict]] = mapped_column(JSONB, default=list)
     confidence: Mapped[float]

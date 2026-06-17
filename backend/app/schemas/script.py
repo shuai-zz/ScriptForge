@@ -6,6 +6,8 @@ from typing import Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from app.schemas.annotation import AnnotationV1
+
 
 class RoleType(str, Enum):
     """Character role classification."""
@@ -174,3 +176,4 @@ class ScriptV1(BaseModel):
     scenes: list[Scene] = Field(default_factory=list)
     scene_index: list[SceneIndexEntry] = Field(default_factory=list)
     global_annotations: list[GlobalAnnotationRef] = Field(default_factory=list)
+    annotations: list[AnnotationV1] = Field(default_factory=list)
