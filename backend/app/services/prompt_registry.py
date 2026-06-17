@@ -197,9 +197,19 @@ PromptRegistry.register(
 3. 检查角色一致性：所有 script 中使用的 char_id 必须在角色名册中存在
 4. 检查时间线连贯性：相邻 scene 的时间跳跃是否合理（如 night→morning 需要新的一天标记）
 5. 检查对白/动作交替：同一 scene 中不允许连续两个同类型 block
-6. 生成全局 annotations（ pacing_suggestion, character_consistency 等）
+6. 生成全局 annotations（pacing_suggestion, character_consistency 等）
+   - 在输出根节点添加 `annotations` 字段，
+     包含完整的 AnnotationV1 对象列表。
+   - 每个 annotation 必须包含 `annotation_id`、`severity`、
+     `category`、`title`、`description`、`confidence`、`target_reference`。
+   - `target_reference.type` 可以是 `global`（全局）、
+     `scene`（指向 scene_id）、
+     `block`（指向 scene_id + block_id）或
+     `character`（指向 character_id）。
+   - 在 scene 的 `annotations` 列表和 block 的 `annotation_refs` 列表中
+     引用对应 `annotation_id`。
 
-输出严格遵循 script-v1.yaml schema。
+输出严格遵循 script-v1.yaml schema，并包含顶层 `annotations` 字段。
 
 ---
 
