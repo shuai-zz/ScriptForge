@@ -300,6 +300,92 @@ export default function ScriptEditor() {
     }
   }, [projectId, script, activeSceneId]);
 
+  /** ---- Annotation actions ---- */
+  const callAnnotationAction = useCallback(
+    async (id: string, action: "accept" | "ignore" | "modify") => {
+      if (!projectId) return false;
+      const res = await fetch(
+        `/api/projects/${projectId}/annotations/${id}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "操作失败" }));
+        toast("error", err.detail || "操作失败");
+        return false;
+      }
+      return true;
+    },
+    [projectId]
+  );
+
+  const handleAcceptAnnotation = useCallback(
+    async (id: string) => {
+      const ok = await callAnnotationAction(id, "accept");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "accepted" as const } : a))
+        );
+      }
+    },
+    [callAnnotationAction]
+  );
+
+  const handleIgnoreAnnotation = useCallback(
+    async (id: string) => {
+      const ok = await callAnnotationAction(id, "ignore");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "ignored" as const } : a))
+        );
+      }
+    },
+    [callAnnotationAction]
+  );
+
+  const handleApplyAlternative = useCallback(
+    async (id: string, alternativeId: string) => {
+      if (!script) return;
+      const annotation = annotations.find((a) => a.id === id);
+      const alternative = annotation?.alternatives?.find(
+        (alt) => alt.alternative_id === alternativeId
+      );
+      if (!annotation || !alternative) return;
+
+      // If the annotation targets a block, replace its text/line with the alternative.
+      if (annotation.block_id) {
+        setScript((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            scenes: prev.scenes.map((scene) => ({
+              ...scene,
+              blocks: scene.blocks.map((block) => {
+                if (block.block_id !== annotation.block_id) return block;
+                if (block.type === "dialogue") {
+                  return { ...block, line: alternative.text };
+                }
+                return { ...block, text: alternative.text };
+              }),
+            })),
+          };
+        });
+      }
+
+      const ok = await callAnnotationAction(id, "modify");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "modified" as const } : a))
+        );
+        toast("success", "已应用改写方案");
+      }
+    },
+    [annotations, callAnnotationAction, script]
+  );
+
   /** ---- Keyboard shortcuts ---- */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -475,9 +561,9 @@ export default function ScriptEditor() {
               const scene = script.scenes.find((s) => s.blocks.some((b) => b.block_id === blockId));
               if (scene) setActiveSceneId(scene.scene_id);
             }}
-            onAccept={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "accepted" as const } : a))}
-            onIgnore={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignored" as const } : a))}
-            onApplyAlternative={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "modified" as const } : a))}
+            onAccept={handleAcceptAnnotation}
+            onIgnore={handleIgnoreAnnotation}
+            onApplyAlternative={handleApplyAlternative}
           />
         )}
       </div>
