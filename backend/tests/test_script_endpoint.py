@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 import pytest_asyncio
-import yaml
 from httpx import ASGITransport, AsyncClient
 
 from app.database import async_session_factory, get_db
@@ -153,22 +152,20 @@ async def test_get_script_from_db_rows(async_client, async_project, async_db):
     assert data["characters"][0]["name"] == "Alice"
 
 
-async def test_get_script_fallback_to_yaml(async_client, async_project, async_db):
-    payload = _valid_script().model_dump(mode="json")
-    payload["metadata"]["title"] = "YAML Fallback"
+async def test_get_script_empty_script_row_returns_404(
+    async_client, async_project, async_db
+):
+    # A script metadata row without any scenes is treated as not generated.
     script_row = Script(
         project_id=async_project.id,
         version="1.0",
-        script_metadata={"title": "YAML Fallback"},
-        yaml_content=yaml.safe_dump(payload, allow_unicode=True),
+        script_metadata={"title": "Empty Script"},
     )
     async_db.add(script_row)
     await async_db.commit()
 
     r = await async_client.get(f"/api/projects/{async_project.id}/script")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["metadata"]["title"] == "YAML Fallback"
+    assert r.status_code == 404
 
 
 async def test_get_script_not_found(async_client, async_project):
@@ -258,7 +255,7 @@ async def test_persist_creates_new_row():
     assert db.add.call_count >= 1
     added = db.add.call_args_list[0].args[0]
     assert added.project_id == project_id
-    assert "测试剧本" in added.yaml_content
+    assert added.script_metadata["title"] == "测试剧本"
     db.commit.assert_awaited_once()
 
 
@@ -280,7 +277,7 @@ async def test_persist_updates_existing_row():
         await _persist_script(project_id, graph, MagicMock())
 
     db.add.assert_not_called()
-    assert "测试剧本" in existing.yaml_content
+    assert existing.script_metadata["title"] == "测试剧本"
     db.commit.assert_awaited_once()
 
 
