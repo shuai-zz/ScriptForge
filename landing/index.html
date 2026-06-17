@@ -859,6 +859,48 @@
   .sub-card .desc{font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78;margin-top:auto}
   .sub-card .lucide{width:2.4vw;height:2.4vw;stroke-width:1.4;color:currentColor;margin-bottom:1.6vh;flex-shrink:0}
   .sub-card.accent .lucide{color:var(--accent-on)}
+  .sub-card.muted{background:transparent;opacity:.72}
+  .sub-card.muted .ttl{font-weight:400;opacity:.75}
+  .sub-card.muted .desc{opacity:.55}
+  .sub-card.muted .nb-corner{opacity:.38}
+
+  /* 四象限需求卡片 (P4) */
+  .quad-card{
+    background:#ffffff;
+    border:1px solid var(--border-subtle);
+    border-top:3px solid var(--accent);
+    border-radius:4px;
+    padding:1.8vh 1.8vw;
+    display:flex;flex-direction:column;gap:1.2vh;
+    min-height:0;
+    box-shadow:0 1px 0 rgba(0,0,0,.03)
+  }
+  .slide.dark .quad-card{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.1)}
+  .quad-head{display:flex;align-items:center;gap:.8vw}
+  .quad-icon{
+    width:2.1vw;height:2.1vw;min-width:24px;min-height:24px;
+    display:flex;align-items:center;justify-content:center;
+    background:var(--accent);color:var(--accent-on);
+    font-family:var(--sans);font-size:max(12px,.95vw);font-weight:600;
+    border-radius:50%
+  }
+  .quad-title{font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.45vw);letter-spacing:-.015em}
+  .quad-list{list-style:none;display:flex;flex-direction:column;gap:1vh;margin:0;padding:0}
+  .quad-list li{display:flex;gap:.8vw;align-items:flex-start}
+  .quad-list .quad-nb{
+    font-family:var(--mono);font-size:max(12px,.72vw);opacity:.42;
+    min-width:2em;margin-top:.25vh
+  }
+  .quad-list .quad-nb.hot{
+    font-family:var(--mono);font-size:max(10px,.62vw);font-weight:600;letter-spacing:0;
+    color:var(--accent-on);background:var(--accent);opacity:1;
+    width:1.65vw;height:1.65vw;min-width:22px;min-height:22px;
+    border-radius:50%;
+    display:inline-flex;align-items:center;justify-content:center;
+    flex-shrink:0;margin-top:.1vh
+  }
+  .quad-list strong{font-weight:500;display:block;margin-bottom:.2vh;font-size:max(14px,.98vw)}
+  .quad-list p{font-size:max(13px,.84vw);opacity:.66;margin:0;line-height:1.4}
 
   /* 三层架构纯色块拼图 (参考图 4 + 6) — 横排等高色块 */
   .stack-row{display:grid;grid-template-columns:repeat(3,1fr);gap:1.6vw;flex:1;margin-top:6vh;align-items:stretch}
@@ -1192,7 +1234,8 @@
     const KEY = 'guizang-ppt-low-power';
     const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
     const stored = localStorage.getItem(KEY);
-    window.__lowPowerMode = stored === '1' || (stored === null && reduced);
+    const staticParam = new URLSearchParams(location.search).get('static');
+    window.__lowPowerMode = staticParam === '1' || stored === '1' || (stored === null && reduced);
     function updateHint(){
       const hint = document.getElementById('hint');
       if(hint) hint.textContent = `← → 翻页 · B ${window.__lowPowerMode ? '动态' : '静态'} · ESC 索引`;
@@ -1262,7 +1305,6 @@
       <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
         <div class="t-meta">ABOUT ME</div>
         <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(7vw,12vh);line-height:.96;letter-spacing:-.035em">个人介绍</h2>
-        <p class="lead" style="font-weight:300;max-width:48ch">请在此处填写您的个人信息、背景与项目角色。</p>
       </div>
       <div class="sub-grid-3-2" data-anim="up">
         <div class="sub-card" style="border-radius:0">
@@ -1278,28 +1320,28 @@
           <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">中国电子科学研究院</p>
         </div>
         <div class="sub-card" style="border-radius:0">
-          <i data-lucide="briefcase" class="lucide"></i>
-          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">03</span>
-          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">工作经历</h4>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">[ 请填写相关经历 ]</p>
-        </div>
-        <div class="sub-card" style="border-radius:0">
           <i data-lucide="code-2" class="lucide"></i>
-          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">04</span>
+          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">03</span>
           <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">技术栈</h4>
           <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">后端开发</p>
         </div>
         <div class="sub-card" style="border-radius:0">
           <i data-lucide="target" class="lucide"></i>
-          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">05</span>
+          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">04</span>
           <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">项目角色</h4>
           <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">独立开发</p>
         </div>
         <div class="sub-card" style="border-radius:0">
           <i data-lucide="mail" class="lucide"></i>
+          <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">05</span>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">电话号码</h4>
+          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">19990838722</p>
+        </div>
+        <div class="sub-card" style="border-radius:0">
+          <i data-lucide="mail" class="lucide"></i>
           <span class="cell-num" style="font-family:var(--mono);font-size:14px;letter-spacing:.16em;opacity:.55">06</span>
-          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">联系方式</h4>
-          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">19990838722 · 2321136573@qq.com</p>
+          <h4 style="font-family:var(--sans),var(--sans-zh);font-weight:500;font-size:max(17px,1.5vw);line-height:1.2;margin-bottom:1vh">邮箱</h4>
+          <p style="font-family:var(--sans),var(--sans-zh);font-size:max(16px,.94vw);line-height:1.55;opacity:.78">2321136573@qq.com</p>
         </div>
       </div>
     </div>
@@ -1315,10 +1357,10 @@
     </div>
     <div class="split-half" data-anim="up" style="flex:1;margin-top:4vh">
       <div class="half" style="padding:5.6vh 3.6vw 4.4vh;justify-content:center">
-        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(8vw,14vh);line-height:.94;letter-spacing:-.025em">传统编剧<br>耗时数月<br><span style="font-style:italic;font-weight:300">AI 只需数小时</span></h2>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(8vw,14vh);line-height:.94;letter-spacing:-.025em">小说作者<br>如何改编剧本？<br><span style="font-style:italic;font-weight:300">AI 辅助创作</span></h2>
       </div>
       <div class="half r-border" style="padding:5.6vh 3.6vw 4.4vh;justify-content:center">
-        <p class="lead" style="font-weight:300;max-width:38ch">长篇小说改编剧本是一项高度专业化的工作。传统模式下，编剧需要逐章阅读、拆解场景、重构对白，一部 50 万字的小说往往需要 3-6 个月才能完成初稿。</p>
+        <p class="lead" style="font-weight:300;max-width:38ch">如何才能将 3 章以上的小说文本自动转换成结构化剧本，且让作者可快速编辑、进一步打磨剧本呢？</p>
         <p class="body" style="font-weight:400;margin-top:2vh;max-width:38ch">ScriptForge 通过 LangGraph 三阶段 AI 流水线，将这一过程压缩到数小时，同时保证剧本质量符合行业标准。</p>
         <div class="t-meta" style="margin-top:3vh">PROBLEM → SOLUTION</div>
       </div>
@@ -1326,12 +1368,115 @@
   </div>
 </section>
 
-<!-- ========== P4 · 项目介绍 · System Diagram ========== -->
+<!-- ========== P4 · 第三章 · 项目需求全景分析 · 2×2 四象限 ========== -->
+<section class="slide" data-layout="S15" data-animate="matrix-fill">
+  <div class="canvas-card">
+    <div class="chrome-min">
+      <div class="l">Chapter 03 · 需求分析</div>
+      <div class="r">04 / 13</div>
+    </div>
+    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr auto;gap:1.4vh">
+      <div data-anim="line" style="display:flex;flex-direction:column;gap:.6vh">
+        <div class="t-meta">REQUIREMENTS ANALYSIS</div>
+        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.2vw,7.4vh);line-height:.96;letter-spacing:-.025em">项目需求全景分析</h2>
+        <p class="t-body-sm" style="max-width:64ch">从内容输入到多格式导出，四大模块覆盖小说转剧本的完整链路。</p>
+      </div>
+      <div data-anim="up" class="matrix-fill" style="display:grid;grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(2,1fr);gap:1.6vh 2vw;flex:1;align-content:stretch">
+        <div class="sub-card quad-card">
+          <div class="quad-head">
+            <span class="quad-icon" aria-hidden="true">→</span>
+            <h3 class="quad-title">内容输入</h3>
+          </div>
+          <ul class="quad-list">
+            <li>
+              <span class="quad-nb">01</span>
+              <div><strong>项目管理</strong><p>多项目并行，状态流转，JSONB 配置</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">02</span>
+              <div><strong>章节管理</strong><p>txt/md 上传，AI 拆分，拖拽排序</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">03</span>
+              <div><strong>LLM 集成</strong><p>双供应商兼容，AES-256-GCM 加密</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="sub-card quad-card">
+          <div class="quad-head">
+            <span class="quad-icon" aria-hidden="true">⇄</span>
+            <h3 class="quad-title">数据与转换</h3>
+          </div>
+          <ul class="quad-list">
+            <li>
+              <span class="quad-nb hot">04</span>
+              <div><strong>数据建模</strong><p>5 套 YAML Schema + Pydantic 校验</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">05</span>
+              <div><strong>AI 转换流水线</strong><p>LangGraph 三阶段，SSE 实时进度</p></div>
+            </li>
+            <li>
+              <span class="quad-nb">06</span>
+              <div><strong>故事圣经</strong><p>角色网络、时间线、伏笔追踪</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="sub-card quad-card">
+          <div class="quad-head">
+            <span class="quad-icon" aria-hidden="true">✎</span>
+            <h3 class="quad-title">创作与协作</h3>
+          </div>
+          <ul class="quad-list">
+            <li>
+              <span class="quad-nb hot">07</span>
+              <div><strong>剧本编辑器</strong><p>动作/对白块，拖拽排序，Focus Mode</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">08</span>
+              <div><strong>角色管理</strong><p>资料卡、关系图谱可视化</p></div>
+            </li>
+            <li>
+              <span class="quad-nb">09</span>
+              <div><strong>注释系统</strong><p>4 级严重度，替代方案，状态流转</p></div>
+            </li>
+          </ul>
+        </div>
+        <div class="sub-card quad-card">
+          <div class="quad-head">
+            <span class="quad-icon" aria-hidden="true">↗</span>
+            <h3 class="quad-title">输出与保障</h3>
+          </div>
+          <ul class="quad-list">
+            <li>
+              <span class="quad-nb hot">10</span>
+              <div><strong>版本管理</strong><p>Git 仓库，Checkpoint，Diff / Restore</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">11</span>
+              <div><strong>多格式导出</strong><p>YAML / Fountain / PDF / FDX / ZIP</p></div>
+            </li>
+            <li>
+              <span class="quad-nb hot">12</span>
+              <div><strong>质量校验</strong><p>7 大语义校验器覆盖一致性</p></div>
+            </li>
+          </ul>
+        </div>
+      </div>
+      <div data-anim="up" style="display:flex;justify-content:space-between;align-items:end;border-top:1px solid var(--border-subtle);padding-top:1.2vh">
+        <div style="font-family:var(--sans);font-weight:200;font-size:min(4.8vw,8.2vh);line-height:.9;font-feature-settings:'tnum'">12<span style="font-size:.36em;font-weight:300;opacity:.6;margin-left:.08em">项需求</span></div>
+        <div class="t-meta">COVERING FULL PIPELINE · NOVEL → SCRIPT</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ========== P5 · 项目介绍 · System Diagram ========== -->
 <section class="slide" data-layout="S17" data-animate="system-diagram">
   <div class="canvas-card">
     <div class="chrome-min">
       <div class="l">System · 项目介绍</div>
-      <div class="r">04 / 13</div>
+      <div class="r">05 / 13</div>
     </div>
     <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr auto;gap:3vh">
       <div data-anim="head" style="display:flex;flex-direction:column;gap:1.4vh">
@@ -1383,44 +1528,6 @@
         <div>
           <div class="t-meta">OUTPUT</div>
           <p class="t-body-sm">YAML / Fountain / PDF / FDX</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ========== P5 · 需求分析 · Four Cards ========== -->
-<section class="slide" data-layout="S19" data-animate="four-cards">
-  <div class="canvas-card">
-    <div class="chrome-min">
-      <div class="l">Requirements · 需求分析</div>
-      <div class="r">05 / 13</div>
-    </div>
-    <div style="flex:1;padding:0;display:grid;grid-template-rows:auto 1fr;gap:3vh">
-      <div data-anim="line" style="display:flex;flex-direction:column;gap:1.4vh">
-        <div style="height:2px;background:var(--accent);width:80px"></div>
-        <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(7vw,12vh);line-height:.96;letter-spacing:-.035em">四大核心需求</h2>
-      </div>
-      <div data-anim="up" style="display:grid;grid-template-columns:repeat(4,1fr);gap:2vw;align-items:stretch">
-        <div style="display:flex;flex-direction:column;gap:1.6vh;padding-top:2vh;border-top:1px solid var(--border-subtle)">
-          <div class="t-meta">— 01</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em">AI 自动转换</h3>
-          <p class="t-body-sm" style="max-width:22ch">将小说文本自动转换为标准剧本格式，支持场景识别、对白提取与动作描写。</p>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:1.6vh;padding-top:2vh;border-top:1px solid var(--border-subtle)">
-          <div class="t-meta">— 02</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em">结构化编辑</h3>
-          <p class="t-body-sm" style="max-width:22ch">块级剧本编辑器，支持动作/对白块切换、拖拽排序、原文溯源与专注模式。</p>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:1.6vh;padding-top:2vh;border-top:1px solid var(--border-subtle)">
-          <div class="t-meta">— 03</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em">质量校验</h3>
-          <p class="t-body-sm" style="max-width:22ch">语义校验器检测角色一致性、Slug 格式、场次连续性与时间线一致性。</p>
-        </div>
-        <div style="display:flex;flex-direction:column;gap:1.6vh;padding-top:2vh;border-top:1px solid var(--border-subtle)">
-          <div class="t-meta">— 04</div>
-          <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.8vw);line-height:1.2;letter-spacing:-.015em">多格式导出</h3>
-          <p class="t-body-sm" style="max-width:22ch">YAML 原生格式、Fountain 纯文本、PDF 标准剧本、Final Draft .fdx。</p>
         </div>
       </div>
     </div>
@@ -1695,37 +1802,53 @@
         <h2 style="font-family:var(--sans),var(--sans-zh);font-weight:200;font-size:min(4.6vw,8vh);line-height:.96;letter-spacing:-.035em">后续规划</h2>
       </div>
       <div data-anim="ledger" style="display:flex;flex-direction:column;gap:0">
-        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.8vh 0;border-bottom:1px solid var(--border-subtle)">
-          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(6vw,9vh);line-height:.9;font-feature-settings:'tnum'">01</div>
-          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.6vh">
-            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2">多 LLM 支持扩展</h3>
-            <p class="t-body-sm">接入 Claude 4、Gemini、DeepSeek 等更多模型，支持模型切换与对比。</p>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">01</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">协作编辑环境</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">多人实时协同编辑剧本，支持评论、建议、版本锁定与细粒度权限，构建可落地的编剧工作室工作流。</p>
           </div>
-          <i data-lucide="cpu" class="lucide" style="width:2.4vw;height:2.4vw"></i>
+          <i data-lucide="users" class="lucide" style="width:2.1vw;height:2.1vw"></i>
         </div>
-        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.8vh 0;border-bottom:1px solid var(--border-subtle)">
-          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(6vw,9vh);line-height:.9;font-feature-settings:'tnum'">02</div>
-          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.6vh">
-            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2">协作编辑功能</h3>
-            <p class="t-body-sm">多人实时协作编辑剧本，支持评论、建议与权限管理。</p>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">02</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">更自由的角色关系</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">从固定预设升级为自定义关系类型与权重，支持关系动态演化、可视化图谱编辑与自动一致性校验。</p>
           </div>
-          <i data-lucide="users" class="lucide" style="width:2.4vw;height:2.4vw"></i>
+          <i data-lucide="git-branch" class="lucide" style="width:2.1vw;height:2.1vw"></i>
         </div>
-        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.8vh 0;border-bottom:1px solid var(--border-subtle)">
-          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(6vw,9vh);line-height:.9;font-feature-settings:'tnum'">03</div>
-          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.6vh">
-            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2">生产环境部署</h3>
-            <p class="t-body-sm">Docker Compose 完整编排、CI/CD 流水线、云部署方案。</p>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">03</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">更多剧本类型适配</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">针对电影、电视剧、舞台剧等体裁，提供差异化的格式规范、节奏模板、场次结构与导出策略。</p>
           </div>
-          <i data-lucide="cloud" class="lucide" style="width:2.4vw;height:2.4vw"></i>
+          <i data-lucide="clapperboard" class="lucide" style="width:2.1vw;height:2.1vw"></i>
         </div>
-        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.8vh 0;border-bottom:1px solid var(--border-subtle)">
-          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(6vw,9vh);line-height:.9;font-feature-settings:'tnum'">04</div>
-          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.6vh">
-            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(18px,1.6vw);line-height:1.2">商业化路径探索</h3>
-            <p class="t-body-sm">SaaS 订阅模式、API 开放平台、企业定制化服务。</p>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">04</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">扩展增量更新功能</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">基于已有 Checkpoint 调用 LLM 做局部改写、节奏优化与风格迁移，保留人工确认环节，避免全量重写。</p>
           </div>
-          <i data-lucide="trending-up" class="lucide" style="width:2.4vw;height:2.4vw"></i>
+          <i data-lucide="refresh-cw" class="lucide" style="width:2.1vw;height:2.1vw"></i>
+        </div>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">05</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">生产环境部署</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">完善 Docker Compose 编排、CI/CD 流水线、HTTPS、监控告警与云厂商一键部署方案。</p>
+          </div>
+          <i data-lucide="cloud" class="lucide" style="width:2.1vw;height:2.1vw"></i>
+        </div>
+        <div class="ledger-row" style="display:grid;grid-template-columns:auto 1fr auto;gap:2vw;align-items:center;padding:0.55vh 0;border-bottom:1px solid var(--border-subtle)">
+          <div class="ledger-num" style="font-family:var(--sans);font-weight:200;font-size:min(4.2vw,6.4vh);line-height:.9;font-feature-settings:'tnum'">06</div>
+          <div class="ledger-label" style="display:flex;flex-direction:column;gap:.4vh">
+            <h3 style="font-family:var(--sans),var(--sans-zh);font-weight:400;font-size:max(16px,1.4vw);line-height:1.2">商业化路径探索</h3>
+            <p class="t-body-sm" style="font-size:max(13px,.85vw);line-height:1.4">验证 SaaS 订阅、API 开放平台、企业私有化部署与定制化服务的商业模式与定价策略。</p>
+          </div>
+          <i data-lucide="trending-up" class="lucide" style="width:2.1vw;height:2.1vw"></i>
         </div>
       </div>
     </div>

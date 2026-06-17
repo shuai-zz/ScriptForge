@@ -27,6 +27,7 @@ from app.schemas.script import (
     ScriptMetadata,
     ScriptV1,
     Slug,
+    SourceRef,
     TimeOfDay,
 )
 from app.schemas.script import (
@@ -99,6 +100,7 @@ def _make_script() -> ScriptV1:
                         order=0,
                         type=BlockType.ACTION,
                         text="Alice enters.",
+                        source_ref=SourceRef(chapter=1, paragraph=1, quote="Alice enters."),
                     ),
                     ScriptBlock(
                         block_id="b2",
@@ -107,6 +109,7 @@ def _make_script() -> ScriptV1:
                         char_id="char_001",
                         char_name="Alice",
                         line="Hi.",
+                        source_ref=SourceRef(chapter=1, paragraph=2, quote="Hi."),
                     ),
                 ],
             )

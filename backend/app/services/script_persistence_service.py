@@ -5,6 +5,7 @@ characters are stored as relational rows and reconstructed on read.
 """
 
 import uuid
+from datetime import datetime, timezone
 
 from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.annotation import Annotation
 from app.models.character import Character
 from app.models.script import Block, Scene, Script
+from app.schemas.annotation import (
+    Alternative,
+    AnnotationCategory,
+    AnnotationV1,
+    Severity,
+    TargetReference,
+    TargetType,
+)
 from app.schemas.script import (
     Scene as SceneSchema,
 )
@@ -24,6 +33,84 @@ from app.schemas.script import (
     Slug,
     SourceRef,
 )
+from app.services.validators import ValidationSeverity, ValidatorRunner
+
+
+# Map validator names to the controlled annotation category vocabulary.
+_VALIDATOR_CATEGORY_MAP: dict[str, AnnotationCategory] = {
+    "CharacterConsistencyValidator": AnnotationCategory.CHARACTER_CONSISTENCY,
+    "CharacterAppearanceValidator": AnnotationCategory.CHARACTER_CONSISTENCY,
+    "DialogueActionAlternationValidator": AnnotationCategory.PACING_SUGGESTION,
+    "TimelineCoherenceValidator": AnnotationCategory.PACING_SUGGESTION,
+    "SlugLineValidator": AnnotationCategory.FORMAT_MISMATCH,
+    "SceneNumberContinuityValidator": AnnotationCategory.FORMAT_MISMATCH,
+    "SourceRefCoverageValidator": AnnotationCategory.FORMAT_MISMATCH,
+}
+
+
+def _severity_from_validator(severity: ValidationSeverity) -> Severity:
+    return Severity(severity.value)
+
+
+def _target_type_for_finding(finding) -> TargetType:
+    if finding.block_id:
+        return TargetType.BLOCK
+    if finding.scene_id:
+        return TargetType.SCENE
+    if finding.char_id:
+        return TargetType.CHARACTER
+    return TargetType.GLOBAL
+
+
+def _build_validator_annotations(script: ScriptV1) -> list[AnnotationV1]:
+    """Run semantic validators and convert their findings into annotations.
+
+    The resulting annotations are attached to the script so they can be persisted
+    and surfaced in the script editor sidebar.
+    """
+    runner = ValidatorRunner()
+    report = runner.run(script)
+    annotations: list[AnnotationV1] = []
+
+    for finding in report.all_findings:
+        annotation_id = f"ann-{uuid.uuid4().hex[:12]}"
+        target_ref = TargetReference(
+            type=_target_type_for_finding(finding),
+            scene_id=finding.scene_id,
+            block_id=finding.block_id,
+            character_id=finding.char_id,
+        )
+        annotations.append(
+            AnnotationV1(
+                annotation_id=annotation_id,
+                severity=_severity_from_validator(finding.severity),
+                category=_VALIDATOR_CATEGORY_MAP.get(
+                    finding.validator, AnnotationCategory.ADAPTATION_DECISION
+                ),
+                target_reference=target_ref,
+                title=finding.validator.replace("Validator", "").replace("_", " "),
+                description=finding.message,
+                confidence=1.0,
+                auto_applied=False,
+                created_at=datetime.now(timezone.utc),
+            )
+        )
+
+    # Link block-level annotations back to their blocks so the editor can show
+    # the "N 批注" badge and navigate to the block.
+    block_lookup = {
+        block.block_id: block
+        for scene in script.scenes
+        for block in scene.blocks
+    }
+    for ann in annotations:
+        block_id = ann.target_reference.block_id
+        if block_id and block_id in block_lookup:
+            block = block_lookup[block_id]
+            if ann.annotation_id not in block.annotation_refs:
+                block.annotation_refs.append(ann.annotation_id)
+
+    return annotations
 
 
 class ScriptPersistenceService:
@@ -213,6 +300,12 @@ class ScriptPersistenceService:
         script_row.script_metadata = (
             script.metadata.model_dump(mode="json") if script.metadata else {}
         )
+
+        # 1.5) When replacing annotations, synthesize annotations from semantic
+        # validators so the editor sidebar is populated after AI conversion.
+        if replace_annotations:
+            validator_annotations = _build_validator_annotations(script)
+            script.annotations = list(script.annotations or []) + validator_annotations
 
         # 2) Upsert characters and build an ID map.
         char_id_map: dict[str, uuid.UUID] = {}

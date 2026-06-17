@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import type { ScriptBlock, ScriptCharacter } from "@/types/script";
 import { cn } from "@/lib/utils";
 import SourcePopover from "./SourcePopover";
@@ -28,6 +28,19 @@ export default function DialogueBlock({
   const parenRef = useRef<HTMLDivElement>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
   const [charDropdown, setCharDropdown] = useState(false);
+
+  // Sync external prop updates without stealing focus/resetting the caret.
+  useEffect(() => {
+    const el = lineRef.current;
+    if (!el || document.activeElement === el) return;
+    el.innerText = block.line ?? "";
+  }, [block.line]);
+
+  useEffect(() => {
+    const el = parenRef.current;
+    if (!el || document.activeElement === el) return;
+    el.innerText = block.parenthetical ?? "";
+  }, [block.parenthetical]);
 
   const handleLineInput = useCallback(() => {
     const line = lineRef.current?.innerText ?? "";
@@ -109,9 +122,6 @@ export default function DialogueBlock({
           suppressContentEditableWarning
           onInput={handleParenInput}
           onKeyDown={handleKeyDown}
-          dangerouslySetInnerHTML={{
-            __html: escapeHtml(block.parenthetical),
-          }}
         />
       )}
 
@@ -124,7 +134,6 @@ export default function DialogueBlock({
         suppressContentEditableWarning
         onInput={handleLineInput}
         onKeyDown={handleKeyDown}
-        dangerouslySetInnerHTML={{ __html: escapeHtml(block.line ?? "") }}
       />
 
       {/* Source ref */}
@@ -149,10 +158,4 @@ export default function DialogueBlock({
       )}
     </div>
   );
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }
