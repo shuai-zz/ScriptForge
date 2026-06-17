@@ -9,7 +9,7 @@ import AnnotationSidebar from "@/components/script-editor/AnnotationSidebar";
 import ExportDialog from "@/components/script-editor/ExportDialog";
 import { toast } from "@/components/ToastContext";
 import { cn } from "@/lib/utils";
-import { Keyboard, Maximize2, Minimize2, Download, X, Loader2, GitCommit, FileText } from "lucide-react";
+import { Keyboard, Maximize2, Minimize2, Download, Save, X, Loader2, GitCommit, FileText } from "lucide-react";
 
 /** Annotation shape consumed by the editor's sidebar. */
 interface EditorAnnotation {
@@ -71,6 +71,7 @@ export default function ScriptEditor() {
   const [checkpointOpen, setCheckpointOpen] = useState(false);
   const [checkpointMessage, setCheckpointMessage] = useState("");
   const [checkpointSaving, setCheckpointSaving] = useState(false);
+  const [saving, setSaving] = useState(false);
   const mainRef = useRef<HTMLDivElement>(null);
 
   /** ---- Load real script + annotations ---- */
@@ -262,6 +263,129 @@ export default function ScriptEditor() {
     }
   }, [projectId, script, checkpointMessage]);
 
+  /** ---- Save script to DB ---- */
+  const saveScript = useCallback(async () => {
+    if (!projectId || !script) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/projects/${projectId}/script`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(script),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "保存失败" }));
+        toast("error", err.detail || "保存失败");
+        return;
+      }
+      const data: ScriptV1 = await res.json();
+      const prevSceneNumber = script.scenes.find(
+        (s) => s.scene_id === activeSceneId
+      )?.scene_number;
+      setScript(data);
+      if (prevSceneNumber) {
+        const nextActive = data.scenes.find(
+          (s) => s.scene_number === prevSceneNumber
+        );
+        setActiveSceneId(nextActive?.scene_id ?? data.scenes[0]?.scene_id ?? null);
+      } else {
+        setActiveSceneId(data.scenes[0]?.scene_id ?? null);
+      }
+      setSelectedBlockId(null);
+      toast("success", "剧本已保存");
+    } catch {
+      toast("error", "保存请求失败");
+    } finally {
+      setSaving(false);
+    }
+  }, [projectId, script, activeSceneId]);
+
+  /** ---- Annotation actions ---- */
+  const callAnnotationAction = useCallback(
+    async (id: string, action: "accept" | "ignore" | "modify") => {
+      if (!projectId) return false;
+      const res = await fetch(
+        `/api/projects/${projectId}/annotations/${id}/action`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action }),
+        }
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: "操作失败" }));
+        toast("error", err.detail || "操作失败");
+        return false;
+      }
+      return true;
+    },
+    [projectId]
+  );
+
+  const handleAcceptAnnotation = useCallback(
+    async (id: string) => {
+      const ok = await callAnnotationAction(id, "accept");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "accepted" as const } : a))
+        );
+      }
+    },
+    [callAnnotationAction]
+  );
+
+  const handleIgnoreAnnotation = useCallback(
+    async (id: string) => {
+      const ok = await callAnnotationAction(id, "ignore");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "ignored" as const } : a))
+        );
+      }
+    },
+    [callAnnotationAction]
+  );
+
+  const handleApplyAlternative = useCallback(
+    async (id: string, alternativeId: string) => {
+      if (!script) return;
+      const annotation = annotations.find((a) => a.id === id);
+      const alternative = annotation?.alternatives?.find(
+        (alt) => alt.alternative_id === alternativeId
+      );
+      if (!annotation || !alternative) return;
+
+      // If the annotation targets a block, replace its text/line with the alternative.
+      if (annotation.block_id) {
+        setScript((prev) => {
+          if (!prev) return prev;
+          return {
+            ...prev,
+            scenes: prev.scenes.map((scene) => ({
+              ...scene,
+              blocks: scene.blocks.map((block) => {
+                if (block.block_id !== annotation.block_id) return block;
+                if (block.type === "dialogue") {
+                  return { ...block, line: alternative.text };
+                }
+                return { ...block, text: alternative.text };
+              }),
+            })),
+          };
+        });
+      }
+
+      const ok = await callAnnotationAction(id, "modify");
+      if (ok) {
+        setAnnotations((prev) =>
+          prev.map((a) => (a.id === id ? { ...a, status: "modified" as const } : a))
+        );
+        toast("success", "已应用改写方案");
+      }
+    },
+    [annotations, callAnnotationAction, script]
+  );
+
   /** ---- Keyboard shortcuts ---- */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -331,6 +455,15 @@ export default function ScriptEditor() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button
+              className="flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 text-xs font-medium text-black hover:bg-primary-hover disabled:opacity-60"
+              onClick={saveScript}
+              disabled={saving}
+              title="保存剧本 (Cmd+S)"
+            >
+              {saving ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />}
+              {saving ? "保存中..." : "保存"}
+            </button>
             <button
               className="rounded p-1.5 text-muted hover:bg-accent hover:text-foreground"
               onClick={() => setCommandOpen(true)}
@@ -428,9 +561,9 @@ export default function ScriptEditor() {
               const scene = script.scenes.find((s) => s.blocks.some((b) => b.block_id === blockId));
               if (scene) setActiveSceneId(scene.scene_id);
             }}
-            onAccept={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "accepted" as const } : a))}
-            onIgnore={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "ignored" as const } : a))}
-            onApplyAlternative={(id) => setAnnotations((prev) => prev.map((a) => a.id === id ? { ...a, status: "modified" as const } : a))}
+            onAccept={handleAcceptAnnotation}
+            onIgnore={handleIgnoreAnnotation}
+            onApplyAlternative={handleApplyAlternative}
           />
         )}
       </div>

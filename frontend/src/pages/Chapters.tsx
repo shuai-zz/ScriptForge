@@ -161,6 +161,7 @@ export default function ChaptersPage() {
 
   // Upload
   const [uploading, setUploading] = useState(false);
+  const [splitChapters, setSplitChapters] = useState(false);
 
   const apiBase = `/api/projects/${projectId}/chapters`;
 
@@ -304,6 +305,9 @@ export default function ChaptersPage() {
     try {
       const formData = new FormData();
       formData.append("file", file);
+      if (splitChapters) {
+        formData.append("split", "true");
+      }
       const res = await fetch(`${apiBase}/upload`, {
         method: "POST",
         body: formData,
@@ -312,7 +316,9 @@ export default function ChaptersPage() {
         const err = await res.json().catch(() => ({ detail: "上传失败" }));
         throw new Error(err.detail || "上传失败");
       }
-      toast("success", `「${file.name}」已上传`);
+      const data = await res.json().catch(() => ({}));
+      const splitCount = splitChapters && data.count ? `（拆出 ${data.count} 章）` : "";
+      toast("success", `「${file.name}」已上传${splitCount}`);
       await fetchChapters();
     } catch (err) {
       toast("error", err instanceof Error ? err.message : "上传失败");
@@ -361,6 +367,15 @@ export default function ChaptersPage() {
               开始转换 ({chapters.length} 章)
             </button>
           )}
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-text-secondary">
+            <input
+              type="checkbox"
+              className="rounded border-border bg-card text-primary focus:ring-primary"
+              checked={splitChapters}
+              onChange={(e) => setSplitChapters(e.target.checked)}
+            />
+            AI 自动拆分章节
+          </label>
           <label
             className={`flex cursor-pointer items-center gap-2 rounded-lg border border-border bg-surface px-4 py-2 text-sm text-text-secondary transition-colors hover:text-text-primary ${
               uploading ? "pointer-events-none opacity-50" : ""

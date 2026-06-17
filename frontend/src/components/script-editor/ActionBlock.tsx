@@ -1,4 +1,4 @@
-import { useRef, useState, useCallback } from "react";
+import { useRef, useState, useCallback, useEffect } from "react";
 import type { ScriptBlock, ScriptCharacter } from "@/types/script";
 import { cn } from "@/lib/utils";
 import SourcePopover from "./SourcePopover";
@@ -25,6 +25,15 @@ export default function ActionBlock({
 }: ActionBlockProps) {
   const textRef = useRef<HTMLDivElement>(null);
   const [sourceOpen, setSourceOpen] = useState(false);
+
+  // Keep the contentEditable uncontrolled while typing so the cursor is not
+  // reset to the start on every parent re-render. Only sync from props when
+  // this element is not the active element (e.g. external update).
+  useEffect(() => {
+    const el = textRef.current;
+    if (!el || document.activeElement === el) return;
+    el.innerText = block.text ?? "";
+  }, [block.text]);
 
   const handleInput = useCallback(() => {
     const text = textRef.current?.innerText ?? "";
@@ -70,7 +79,6 @@ export default function ActionBlock({
         suppressContentEditableWarning
         onInput={handleInput}
         onKeyDown={handleKeyDown}
-        dangerouslySetInnerHTML={{ __html: escapeHtml(block.text ?? "") }}
       />
 
       {block.source_ref && (
@@ -94,10 +102,4 @@ export default function ActionBlock({
       )}
     </div>
   );
-}
-
-function escapeHtml(text: string): string {
-  const div = document.createElement("div");
-  div.textContent = text;
-  return div.innerHTML;
 }

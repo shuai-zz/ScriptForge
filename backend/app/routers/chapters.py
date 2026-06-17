@@ -14,6 +14,7 @@ from app.schemas.chapter import (
     ChapterUpdate,
 )
 from app.services.chapter_service import ChapterService
+from app.services.chapter_splitter import ChapterSplitError, split_text_by_llm
 
 router = APIRouter(prefix="/api/projects/{project_id}/chapters", tags=["chapters"])
 
@@ -65,9 +66,15 @@ async def create_chapter(
 async def upload_chapter(
     project_id: uuid.UUID,
     file: UploadFile = File(...),
+    split: bool = Form(False),
     db: AsyncSession = Depends(get_db),
 ) -> dict:
-    """Upload a chapter via .txt or .md file."""
+    """Upload a chapter via .txt or .md file.
+
+    If ``split`` is true, the entire file is sent to the configured LLM to
+    detect chapter boundaries and titles, and multiple chapter records are
+    created.
+    """
     if file.content_type and file.content_type not in (
         "text/plain",
         "text/markdown",
@@ -90,6 +97,23 @@ async def upload_chapter(
 
     # Derive title from filename
     title = file.filename.rsplit(".", 1)[0] if file.filename else "未命名章节"
+
+    if split:
+        try:
+            chapters = await split_text_by_llm(db, raw_text)
+        except ChapterSplitError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+        created = []
+        for chapter_title, chapter_text in chapters:
+            chapter = await ChapterService.create(
+                db,
+                project_id=project_id,
+                title=chapter_title,
+                raw_text=chapter_text,
+            )
+            created.append(_to_response(chapter))
+        return {"split": True, "count": len(created), "chapters": created}
 
     chapter = await ChapterService.create(
         db,

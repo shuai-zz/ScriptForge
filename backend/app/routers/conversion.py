@@ -4,7 +4,6 @@ import json
 import logging
 import uuid
 
-import yaml
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from langchain_core.runnables import RunnableConfig
@@ -15,7 +14,6 @@ from app.database import async_session_factory
 from app.models.chapter import Chapter
 from app.models.conversion import ConversionRun, LLMProvider
 from app.models.project import Project
-from app.models.script import Script
 from app.models.story_bible import StoryBible
 from app.pipeline.graph import build_conversion_graph
 from app.pipeline.state import ConversionState
@@ -24,6 +22,7 @@ from app.services.character_service import (
     CharacterRelationshipService,
     CharacterService,
 )
+from app.services.script_persistence_service import ScriptPersistenceService
 
 logger = logging.getLogger(__name__)
 
@@ -427,11 +426,12 @@ async def _load_project_providers(
 async def _persist_script(
     project_id: uuid.UUID, graph, config: RunnableConfig
 ) -> None:
-    """Persist the assembled ScriptV1 to the ``scripts`` table (upsert by project).
+    """Persist the assembled ScriptV1 to DB rows and YAML (upsert by project).
 
     Best-effort: reads the final pipeline state from the graph checkpointer and
-    writes the YAML. Any failure is logged but never propagated — persistence
-    must not break a finished conversion.
+    writes both normalized DB rows (scenes/blocks/characters) and the legacy YAML
+    string. Any failure is logged but never propagated — persistence must not
+    break a finished conversion.
     """
     try:
         snapshot = await graph.aget_state(config)
@@ -439,30 +439,14 @@ async def _persist_script(
         if not assembled:
             return
         script = ScriptV1.model_validate(assembled)
-        script_json = script.model_dump(mode="json")
-        yaml_str = yaml.safe_dump(
-            script_json,
-            allow_unicode=True,
-            sort_keys=False,
-            default_flow_style=False,
-        )
         async with async_session_factory() as db:
-            result = await db.execute(
-                select(Script).where(Script.project_id == project_id)
+            await ScriptPersistenceService.persist_script(
+                db,
+                project_id,
+                script,
+                delete_missing_characters=True,
+                replace_annotations=True,
             )
-            row = result.scalar_one_or_none()
-            if row:
-                row.yaml_content = yaml_str
-                row.script_metadata = script_json.get("metadata")
-            else:
-                db.add(
-                    Script(
-                        project_id=project_id,
-                        yaml_content=yaml_str,
-                        script_metadata=script_json.get("metadata"),
-                    )
-                )
-            await db.commit()
     except Exception:
         logger.exception("Failed to persist script for project %s", project_id)
 

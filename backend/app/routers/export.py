@@ -4,47 +4,32 @@ import io
 import uuid
 from urllib.parse import quote
 
-import yaml
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import StreamingResponse
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.models.script import Script
 from app.schemas.script import ScriptV1
 from app.services.export_service import ExportService
+from app.services.script_persistence_service import ScriptPersistenceService
 
 router = APIRouter(prefix="/api/projects/{project_id}/export", tags=["export"])
 
 
 def _content_disposition(filename: str) -> str:
     """Build RFC 5987 / RFC 6266 Content-Disposition header."""
-    ascii_name = "".join(c if c.isascii() and (c.isalnum() or c in "._-") else "_" for c in filename)
+    ascii_name = "".join(
+        c if c.isascii() and (c.isalnum() or c in "._-") else "_" for c in filename
+    )
     encoded = quote(filename, safe="")
     return f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{encoded}"
 
 
 async def _load_script(db: AsyncSession, project_id: uuid.UUID) -> ScriptV1:
-    """Load the project's script from DB and validate against ScriptV1."""
-    result = await db.execute(
-        select(Script).where(Script.project_id == project_id)
-    )
-    script_orm = result.scalar_one_or_none()
-    if not script_orm:
+    """Load the project's script from normalized DB rows."""
+    script = await ScriptPersistenceService.load_script(db, project_id)
+    if script is None:
         raise HTTPException(status_code=404, detail="该项目暂无剧本")
-
-    if not script_orm.yaml_content:
-        raise HTTPException(status_code=404, detail="剧本内容为空")
-
-    try:
-        data = yaml.safe_load(script_orm.yaml_content)
-        script = ScriptV1.model_validate(data)
-    except Exception as exc:
-        raise HTTPException(
-            status_code=500, detail=f"剧本格式解析失败: {exc}"
-        ) from exc
-
     return script
 
 
